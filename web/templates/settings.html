@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Settings — AegisEDR{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+<div class="grid-2" style="gap:20px;">
+  <!-- Protection Settings -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">🔰 Protection Settings</span></div>
+    <div class="card-body">
+      {% for key, label in [
+        ('auto_quarantine','Auto-Quarantine threats'),
+        ('auto_block_ransomware','Auto-kill Ransomware processes'),
+        ('virustotal_enabled','VirusTotal integration'),
+        ('ioc_auto_update','Auto-update IoC feeds')
+      ] %}
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-size:13px;font-weight:500;">{{ label }}</div>
+        </div>
+        <label style="position:relative;display:inline-block;width:42px;height:24px;margin:0;">
+          <input type="checkbox" id="{{ key }}" {% if settings.get(key,'0')=='1' %}checked{% endif %} onchange="saveSetting('{{ key }}', this.checked?'1':'0')">
+          <span style="position:absolute;cursor:pointer;inset:0;background:var(--border);border-radius:24px;transition:.3s;"></span>
+        </label>
+      </div>
+      {% endfor %}
+
+      <div style="margin-top:16px;">
+        <label>VirusTotal API Key</label>
+        <div style="display:flex;gap:8px;">
+          <input type="password" id="vtApiKey" value="{{ settings.get('vt_api_key','') }}" placeholder="Enter API key...">
+          <button class="btn btn-primary" onclick="saveSetting('vt_api_key', document.getElementById('vtApiKey').value)">Save</button>
+        </div>
+      </div>
+      <div style="margin-top:12px;">
+        <label>IoC Update Interval (hours)</label>
+        <input type="number" id="iocInterval" value="{{ settings.get('ioc_update_interval_hours','6') }}" min="1" max="168" onchange="saveSetting('ioc_update_interval_hours', this.value)">
+      </div>
+      <div style="margin-top:12px;">
+        <label>Log Retention (days)</label>
+        <input type="number" id="retention" value="{{ settings.get('retention_days','90') }}" min="7" onchange="saveSetting('retention_days', this.value)">
+      </div>
+    </div>
+  </div>
+
+  <!-- User Management -->
+  <div>
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header">
+        <span class="card-title">👤 Users</span>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('addUserModal').classList.add('open')">+ Add</button>
+      </div>
+      <table>
+        <thead><tr><th>Username</th><th>Role</th><th>Last Login</th><th></th></tr></thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td style="font-weight:500;">{{ u.username }}</td>
+            <td><span class="badge badge-medium">{{ u.role }}</span></td>
+            <td class="text-muted">{{ u.last_login[:16] if u.last_login else 'Never' }}</td>
+            <td>
+              {% if u.username != user.sub %}
+              <button class="btn btn-danger btn-sm" onclick="deleteUser({{ u.id }})">✕</button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-title">ℹ️ System Info</span></div>
+      <div class="card-body">
+        <table>
+          <tbody>
+            <tr><td class="text-muted">Version</td><td>AegisEDR v1.0.0</td></tr>
+            <tr><td class="text-muted">Console Port</td><td>9000</td></tr>
+            <tr><td class="text-muted">Database</td><td>/opt/aegisedr/data/aegisedr.db</td></tr>
+            <tr><td class="text-muted">YARA Rules</td><td>/opt/aegisedr/yara_rules/</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal-backdrop" id="addUserModal">
+  <div class="modal">
+    <div class="modal-title">Add User</div>
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="newUsername">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="newPassword">
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="document.getElementById('addUserModal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-primary" onclick="addUser()">Create</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* Toggle switch styling */
+document.querySelectorAll('label input[type=checkbox]').forEach(cb => {
+  const span = cb.nextElementSibling;
+  const update = () => span.style.background = cb.checked ? 'var(--accent)' : 'var(--border)';
+  cb.addEventListener('change', update); update();
+});
+
+async function saveSetting(key, value) {
+  await api('POST', '/api/settings', {[key]: value});
+  showAlert('Saved');
+}
+
+async function addUser() {
+  const u = document.getElementById('newUsername').value.trim();
+  const p = document.getElementById('newPassword').value;
+  if (!u || !p) return;
+  await api('POST', '/api/users/add', {username: u, password: p, role: 'admin'});
+  document.getElementById('addUserModal').classList.remove('open');
+  location.reload();
+}
+
+async function deleteUser(id) {
+  if (!confirm('Delete this user?')) return;
+  await api('DELETE', `/api/users/${id}`);
+  location.reload();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Package
+    Name="AegisEDR Agent"
+    Manufacturer="AegisEDR Security"
+    Version="1.0.0"
+    UpgradeCode="B4E7A1C2-8F3D-4A9E-B2C1-7D5F8E9A0B3C"
+    Language="1033"
+    Compressed="yes"
+    Scope="perMachine">
+
+    <SummaryInformation Description="AegisEDR Endpoint Detection and Response Agent"/>
+
+    <MajorUpgrade Schedule="afterInstallInitialize"
+      DowngradeErrorMessage="A newer version of AegisEDR Agent is already installed."/>
+
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high"/>
+
+    <Icon Id="AegisIcon" SourceFile="..\assets\icon.ico"/>
+    <Property Id="ARPPRODUCTICON" Value="AegisIcon"/>
+    <Property Id="ARPHELPLINK"    Value="https://aegisedr.local"/>
+    <Property Id="CONSOLEURL"     Value="$(var.ConsoleUrl)"/>
+
+    <WixVariable Id="WixUILicenseRtf" Value="..\assets\LICENSE.rtf"/>
+    <WixVariable Id="WixUIBannerBmp"  Value="..\assets\logo_header.bmp"/>
+    <WixVariable Id="WixUIDialogBmp"  Value="..\assets\logo_wizard.bmp"/>
+
+    <ui:WixUI Id="WixUI_InstallDir"/>
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR"/>
+
+    <!-- Directories -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLDIR" Name="AegisEDR Agent"/>
+    </StandardDirectory>
+
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="APPDATAROOT" Name="AegisEDR">
+        <Directory Id="LOGSDIR"       Name="logs"/>
+        <Directory Id="QUARANTINEDIR" Name="quarantine"/>
+        <Directory Id="DATADIR"       Name="data"/>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="APPMENUFOLDER" Name="AegisEDR Agent"/>
+    </StandardDirectory>
+
+    <!-- Components: executables -->
+    <ComponentGroup Id="AppFiles" Directory="INSTALLDIR">
+      <Component Id="AgentExeComp">
+        <File Id="AgentExeFile" Name="AegisEDR-Agent.exe"
+              Source="..\dist\AegisEDR-Agent.exe" KeyPath="yes"/>
+      </Component>
+      <Component Id="TrayExeComp">
+        <File Id="TrayExeFile" Name="AegisEDR-Tray.exe"
+              Source="..\dist\AegisEDR-Tray.exe" KeyPath="yes"/>
+      </Component>
+      <Component Id="IconComp">
+        <File Id="IconFile" Name="icon.ico"
+              Source="..\assets\icon.ico" KeyPath="yes"/>
+      </Component>
+    </ComponentGroup>
+
+    <!-- Components: data directories + config registry -->
+    <ComponentGroup Id="DataDirs">
+      <Component Id="LogsDirComp" Directory="LOGSDIR">
+        <CreateFolder/>
+        <RegistryValue Root="HKLM" Key="Software\AegisEDR\Agent"
+                       Name="LogsDir" Type="string" Value="[LOGSDIR]" KeyPath="yes"/>
+      </Component>
+      <Component Id="QuarantineDirComp" Directory="QUARANTINEDIR">
+        <CreateFolder/>
+        <RegistryValue Root="HKLM" Key="Software\AegisEDR\Agent"
+                       Name="QuarantineDir" Type="string" Value="[QUARANTINEDIR]" KeyPath="yes"/>
+      </Component>
+      <Component Id="DataDirComp" Directory="DATADIR">
+        <CreateFolder/>
+        <RegistryValue Root="HKLM" Key="Software\AegisEDR\Agent"
+                       Name="DataDir" Type="string" Value="[DATADIR]" KeyPath="yes"/>
+      </Component>
+      <Component Id="ConfigRegComp" Directory="APPDATAROOT">
+        <CreateFolder/>
+        <RegistryValue Root="HKLM" Key="Software\AegisEDR\Agent"
+                       Name="ConsoleUrl" Type="string" Value="[CONSOLEURL]" KeyPath="yes"/>
+      </Component>
+    </ComponentGroup>
+
+    <!-- Start menu shortcuts -->
+    <ComponentGroup Id="Shortcuts" Directory="APPMENUFOLDER">
+      <Component Id="MenuShortcuts">
+        <Shortcut Id="AgentShortcut"   Name="AegisEDR Agent"
+                  Target="[INSTALLDIR]AegisEDR-Agent.exe"
+                  Icon="AegisIcon" WorkingDirectory="INSTALLDIR"/>
+        <Shortcut Id="TrayShortcut"    Name="AegisEDR Tray Monitor"
+                  Target="[INSTALLDIR]AegisEDR-Tray.exe"
+                  Icon="AegisIcon" WorkingDirectory="INSTALLDIR"/>
+        <Shortcut Id="UninstallShortcut" Name="Uninstall AegisEDR Agent"
+                  Target="[SystemFolder]msiexec.exe"
+                  Arguments="/x [ProductCode]"/>
+        <RemoveFolder Id="RemoveMenuFolder" On="uninstall"/>
+        <RegistryValue Root="HKCU" Key="Software\AegisEDR\Agent"
+                       Name="Installed" Type="integer" Value="1" KeyPath="yes"/>
+      </Component>
+    </ComponentGroup>
+
+    <!-- Custom actions via cmd.exe -->
+    <CustomAction Id="CA_WriteConfig"
+        Directory="INSTALLDIR"
+        ExeCommand="&quot;[SystemFolder]cmd.exe&quot; /c echo {{&quot;console_url&quot;:&quot;[CONSOLEURL]&quot;,&quot;agent_version&quot;:&quot;1.0.0&quot;}} &gt; &quot;[CommonAppDataFolder]AegisEDR\config.json&quot;"
+        Execute="deferred" Impersonate="no" Return="ignore"/>
+
+    <CustomAction Id="CA_CreateTask"
+        Directory="INSTALLDIR"
+        ExeCommand="&quot;[SystemFolder]schtasks.exe&quot; /Create /F /TN &quot;AegisEDRAgent&quot; /TR &quot;&apos;&quot;[INSTALLDIR]AegisEDR-Agent.exe&apos;&quot; [CONSOLEURL]&quot; /SC ONSTART /RU SYSTEM /RL HIGHEST /DELAY 0000:30"
+        Execute="deferred" Impersonate="no" Return="ignore"/>
+
+    <CustomAction Id="CA_StartTask"
+        Directory="INSTALLDIR"
+        ExeCommand="&quot;[SystemFolder]schtasks.exe&quot; /Run /TN &quot;AegisEDRAgent&quot;"
+        Execute="deferred" Impersonate="no" Return="ignore"/>
+
+    <CustomAction Id="CA_RemoveTask"
+        Directory="INSTALLDIR"
+        ExeCommand="&quot;[SystemFolder]schtasks.exe&quot; /Delete /TN &quot;AegisEDRAgent&quot; /F"
+        Execute="deferred" Impersonate="no" Return="ignore"/>
+
+    <InstallExecuteSequence>
+      <Custom Action="CA_WriteConfig" After="InstallFiles" Condition="NOT Installed AND NOT REMOVE"/>
+      <Custom Action="CA_CreateTask"  After="CA_WriteConfig" Condition="NOT Installed AND NOT REMOVE"/>
+      <Custom Action="CA_StartTask"   After="CA_CreateTask"  Condition="NOT Installed AND NOT REMOVE"/>
+      <Custom Action="CA_RemoveTask"  After="InstallInitialize" Condition="REMOVE~=&quot;ALL&quot;"/>
+    </InstallExecuteSequence>
+
+    <!-- Feature -->
+    <Feature Id="MainFeature" Title="AegisEDR Agent" Level="1">
+      <ComponentGroupRef Id="AppFiles"/>
+      <ComponentGroupRef Id="DataDirs"/>
+      <ComponentGroupRef Id="Shortcuts"/>
+    </Feature>
+
+  </Package>
+</Wix>

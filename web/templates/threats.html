@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}Threats — AegisEDR{% endblock %}
+{% block page_title %}Threats{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+  <input type="text" id="searchInput" placeholder="Search threats..." style="max-width:300px;" oninput="filterTable()">
+  <select id="severityFilter" onchange="filterTable()" style="width:auto;">
+    <option value="">All Severities</option>
+    <option value="critical">Critical</option>
+    <option value="high">High</option>
+    <option value="medium">Medium</option>
+    <option value="low">Low</option>
+  </select>
+  <select id="typeFilter" onchange="filterTable()" style="width:auto;">
+    <option value="">All Types</option>
+    <option value="ransomware">Ransomware</option>
+    <option value="spyware">Spyware</option>
+    <option value="malware">Malware</option>
+    <option value="ioc_match">IoC Match</option>
+    <option value="yara_match">YARA Match</option>
+    <option value="behavioral">Behavioral</option>
+  </select>
+  <div class="ml-auto text-muted">{{ threats|length }} threats</div>
+</div>
+
+<div class="card">
+  <div style="overflow-x:auto;">
+    <table id="threatsTable">
+      <thead>
+        <tr>
+          <th>Threat</th>
+          <th>Type</th>
+          <th>Severity</th>
+          <th>Endpoint</th>
+          <th>File / Process</th>
+          <th>Status</th>
+          <th>Detected</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in threats %}
+        <tr data-severity="{{ t.severity }}" data-type="{{ t.threat_type }}" data-name="{{ t.name|lower }}">
+          <td>
+            <div style="font-weight:600;font-size:13px;">{{ t.name }}</div>
+            {% if t.description %}<div class="text-muted">{{ t.description[:60] }}</div>{% endif %}
+          </td>
+          <td><span class="badge badge-{{ t.threat_type }}">{{ t.threat_type }}</span></td>
+          <td><span class="badge badge-{{ t.severity }}">{{ t.severity }}</span></td>
+          <td>{{ t.hostname or 'Unknown' }}</td>
+          <td>
+            {% if t.file_path %}<code>{{ t.file_path[-40:] }}</code>{% endif %}
+            {% if t.process_name %}<div class="text-muted">{{ t.process_name }}{% if t.process_pid %} ({{ t.process_pid }}){% endif %}</div>{% endif %}
+            {% if t.network_ip or t.network_domain %}<div class="text-muted">{{ t.network_ip or t.network_domain }}</div>{% endif %}
+          </td>
+          <td>
+            {% if t.false_positive %}
+              <span class="badge" style="background:rgba(148,163,184,.1);color:var(--text2);">False Pos.</span>
+            {% else %}
+              <span class="badge badge-{{ t.status }}">{{ t.status }}</span>
+            {% endif %}
+          </td>
+          <td class="text-muted">{{ t.detected_at[:16] }}</td>
+          <td>
+            {% if t.status == 'active' and not t.false_positive %}
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-success btn-sm" onclick="resolve({{ t.id }}, this)">✓</button>
+              <button class="btn btn-ghost btn-sm" onclick="falsePosBtn({{ t.id }}, this)" title="Mark as false positive">FP</button>
+            </div>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" style="text-align:center;color:var(--green);padding:32px;">✓ No threats found</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function filterTable() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const sev = document.getElementById('severityFilter').value;
+  const type = document.getElementById('typeFilter').value;
+  document.querySelectorAll('#threatsTable tbody tr[data-severity]').forEach(row => {
+    const matchSearch = !search || row.dataset.name.includes(search);
+    const matchSev = !sev || row.dataset.severity === sev;
+    const matchType = !type || row.dataset.type === type;
+    row.style.display = (matchSearch && matchSev && matchType) ? '' : 'none';
+  });
+}
+
+async function resolve(id, btn) {
+  await api('POST', `/api/threats/${id}/resolve`);
+  btn.closest('tr').querySelector('td:nth-child(6)').innerHTML = '<span class="badge badge-resolved">resolved</span>';
+  btn.closest('div').remove();
+}
+
+async function falsePosBtn(id, btn) {
+  await api('POST', `/api/threats/${id}/false_positive`);
+  btn.closest('tr').querySelector('td:nth-child(6)').innerHTML = '<span class="badge" style="background:rgba(148,163,184,.1);color:var(--text2);">False Pos.</span>';
+  btn.closest('div').remove();
+}
+
+// WebSocket — live threat rows
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${proto}//${location.host}/ws/scan`);
+  ws.onmessage = (e) => {
+    try {
+      const ev = JSON.parse(e.data);
+      if (ev.type !== 'threat_detected') return;
+      const tbody = document.querySelector('#threatsTable tbody');
+      // Remove "no threats" placeholder if present
+      const empty = tbody.querySelector('td[colspan]');
+      if (empty) empty.closest('tr').remove();
+      const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
+      const sev = ev.severity || 'medium';
+      const file = ev.file_path || ev.process_name || '';
+      const row = document.createElement('tr');
+      row.dataset.severity = sev;
+      row.dataset.type = ev.threat_type || '';
+      row.dataset.name = (ev.name || '').toLowerCase();
+      row.style.animation = 'fadeInRow .4s ease';
+      row.innerHTML = `
+        <td><div style="font-weight:600;font-size:13px;">${ev.name||'Unknown'}</div>
+            <div class="text-muted">${ev.description||''}</div></td>
+        <td><span class="badge badge-${ev.threat_type||''}">${ev.threat_type||''}</span></td>
+        <td><span class="badge badge-${sev}">${sev}</span></td>
+        <td>${ev.endpoint||'Unknown'}</td>
+        <td>${file ? `<code>${file.split('\\').pop().split('/').pop()}</code>` : ''}</td>
+        <td><span class="badge badge-active">active</span></td>
+        <td class="text-muted">${now}</td>
+        <td></td>`;
+      tbody.insertBefore(row, tbody.firstChild);
+      // Update counter
+      const ctr = document.querySelector('.ml-auto.text-muted');
+      if (ctr) ctr.textContent = tbody.querySelectorAll('tr[data-severity]').length + ' threats';
+    } catch {}
+  };
+  ws.onclose = () => setTimeout(connectWS, 3000);
+  ws.onerror = () => ws.close();
+}
+connectWS();
+</script>
+<style>
+@keyframes fadeInRow { from{opacity:0;background:rgba(239,68,68,.15)} to{opacity:1;background:transparent} }
+</style>
+{% endblock %}

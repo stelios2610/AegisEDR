@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — AegisEDR{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+{% if pending_count > 0 %}
+<a href="/endpoints" style="text-decoration:none;">
+  <div style="background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.35);border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;gap:12px;cursor:pointer;">
+    <span style="font-size:20px;">⏳</span>
+    <div>
+      <span style="font-weight:600;color:var(--yellow);">{{ pending_count }} new agent(s) waiting for adoption</span>
+      <span class="text-muted" style="margin-left:12px;">→ Go to Endpoints to approve</span>
+    </div>
+  </div>
+</a>
+{% endif %}
+<div class="stats-grid">
+  <div class="stat-card {% if active_threats > 0 %}red{% else %}green{% endif %}">
+    <div class="stat-label">Active Threats</div>
+    <div class="stat-value">{{ active_threats }}</div>
+    <div class="stat-sub">{% if critical_threats > 0 %}{{ critical_threats }} critical{% else %}All clear{% endif %}</div>
+  </div>
+  <div class="stat-card blue">
+    <div class="stat-label">Online Endpoints</div>
+    <div class="stat-value">{{ online_endpoints }}</div>
+    <div class="stat-sub">of {{ total_endpoints }} total</div>
+  </div>
+  <div class="stat-card orange">
+    <div class="stat-label">Quarantine</div>
+    <div class="stat-value">{{ quarantine_count }}</div>
+    <div class="stat-sub">files isolated</div>
+  </div>
+  <div class="stat-card purple">
+    <div class="stat-label">IoC Database</div>
+    <div class="stat-value">{{ "{:,}".format(ioc_count) }}</div>
+    <div class="stat-sub">indicators loaded</div>
+  </div>
+</div>
+
+<div class="grid-2" style="gap:20px;">
+  <!-- Recent Threats -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">⚠️ Recent Threats</span>
+      <a href="/threats" class="btn btn-ghost btn-sm">View all</a>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr><th>Threat</th><th>Host</th><th>Severity</th><th>Time</th></tr>
+        </thead>
+        <tbody>
+          {% for t in recent_threats %}
+          <tr>
+            <td>
+              <div style="font-weight:500;font-size:13px;">{{ t.name[:40] }}</div>
+              <div class="text-muted">{{ t.threat_type }}</div>
+            </td>
+            <td>{{ t.hostname or 'Unknown' }}</td>
+            <td><span class="badge badge-{{ t.severity }}">{{ t.severity }}</span></td>
+            <td class="text-muted">{{ t.detected_at[:16] }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" style="text-align:center;color:var(--green);padding:24px;">✓ No active threats</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Endpoints -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">💻 Endpoints</span>
+      <a href="/endpoints" class="btn btn-ghost btn-sm">Manage</a>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr><th>Host</th><th>OS</th><th>Status</th><th>Last Seen</th></tr>
+        </thead>
+        <tbody>
+          {% for ep in endpoints %}
+          <tr>
+            <td>
+              <div style="font-weight:500;">{{ ep.hostname }}</div>
+              <div class="text-muted">{{ ep.ip_address }}</div>
+            </td>
+            <td class="text-muted">{{ ep.os_type }}</td>
+            <td><span class="badge badge-{{ ep.status }}">{{ ep.status }}</span></td>
+            <td class="text-muted">{{ ep.last_seen[:16] if ep.last_seen else 'Never' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" style="text-align:center;color:var(--text2);padding:24px;">No endpoints registered</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Protection Status -->
+<div class="card mt-4">
+  <div class="card-header">
+    <span class="card-title">🔰 Protection Modules</span>
+  </div>
+  <div class="card-body">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;">
+      {% for module, icon, color in [
+        ('Anti-Malware','🦠','green'),('Anti-Ransomware','💰','green'),
+        ('Anti-Spyware','👁','green'),('YARA Engine','🔍','green'),
+        ('IoC Detection','🌐','green'),('Behavioral','🧠','green')
+      ] %}
+      <div style="background:var(--bg3);border:1px solid rgba(34,197,94,.2);border-radius:10px;padding:14px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:20px;">{{ icon }}</span>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text);">{{ module }}</div>
+          <div style="font-size:11px;color:var(--green);">● Active</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<style>
+#threatToast {
+  position:fixed;top:20px;right:20px;z-index:9999;
+  background:#1e1e2e;border:1px solid var(--red);border-radius:14px;
+  padding:18px 22px;min-width:320px;max-width:420px;
+  box-shadow:0 8px 32px rgba(239,68,68,.35);
+  display:none;animation:slideIn .3s ease;
+}
+@keyframes slideIn { from{transform:translateX(120%);opacity:0} to{transform:translateX(0);opacity:1} }
+#threatToast .t-head { display:flex;align-items:center;gap:10px;margin-bottom:8px; }
+#threatToast .t-icon { font-size:22px; }
+#threatToast .t-title { font-weight:700;color:var(--red);font-size:15px; }
+#threatToast .t-badge { font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase; }
+#threatToast .t-body { font-size:12px;color:var(--text2);line-height:1.5; }
+#threatToast .t-close { position:absolute;top:10px;right:12px;cursor:pointer;color:var(--text2);font-size:16px; }
+.sev-critical { background:rgba(239,68,68,.2);color:#ef4444; }
+.sev-high     { background:rgba(249,115,22,.2);color:#f97316; }
+.sev-medium   { background:rgba(234,179,8,.2);color:#eab308; }
+.sev-low      { background:rgba(148,163,184,.15);color:#94a3b8; }
+</style>
+
+<!-- Real-time threat toast -->
+<div id="threatToast">
+  <span class="t-close" onclick="closeToast()">✕</span>
+  <div class="t-head">
+    <span class="t-icon">🚨</span>
+    <span class="t-title">Threat Detected!</span>
+    <span id="tBadge" class="t-badge sev-critical">CRITICAL</span>
+  </div>
+  <div class="t-body">
+    <div id="tName" style="font-weight:600;color:var(--text);margin-bottom:4px;"></div>
+    <div id="tEndpoint"></div>
+    <div id="tFile" style="margin-top:3px;"></div>
+    <div style="margin-top:8px;">
+      <a href="/threats" style="color:var(--accent);font-size:12px;font-weight:600;">→ View in Threats</a>
+    </div>
+  </div>
+</div>
+
+<script>
+let toastTimer;
+
+function showThreatToast(ev) {
+  const sev = ev.severity || 'medium';
+  document.getElementById('tBadge').textContent = sev.toUpperCase();
+  document.getElementById('tBadge').className = 't-badge sev-' + sev;
+  document.getElementById('tName').textContent = ev.name || 'Unknown Threat';
+  document.getElementById('tEndpoint').textContent = '🖥 ' + (ev.endpoint || '');
+  const file = ev.file_path || ev.process_name || '';
+  document.getElementById('tFile').textContent = file ? '📄 ' + file.split('\\').pop().split('/').pop() : '';
+  const toast = document.getElementById('threatToast');
+  toast.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(closeToast, 12000);
+  // Flash page title
+  let flashing = true;
+  const origTitle = document.title;
+  const flashInterval = setInterval(() => {
+    document.title = flashing ? '🚨 THREAT DETECTED!' : origTitle;
+    flashing = !flashing;
+  }, 800);
+  setTimeout(() => { clearInterval(flashInterval); document.title = origTitle; }, 12000);
+}
+
+function closeToast() {
+  document.getElementById('threatToast').style.display = 'none';
+}
+
+// WebSocket for real-time events
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${proto}//${location.host}/ws/scan`);
+
+  ws.onmessage = (e) => {
+    try {
+      const ev = JSON.parse(e.data);
+      if (ev.type === 'threat_detected') {
+        showThreatToast(ev);
+        // Update active threats counter
+        const el = document.querySelector('.stat-card .stat-value');
+        if (el) el.textContent = parseInt(el.textContent || 0) + 1;
+      }
+    } catch {}
+  };
+
+  ws.onclose = () => setTimeout(connectWS, 3000);
+  ws.onerror = () => ws.close();
+}
+
+connectWS();
+</script>
+{% endblock %}

@@ -1,0 +1,17 @@
+[Unit]
+Description=AegisEDR Security Console
+After=network.target
+
+[Service]
+Type=simple
+User=aegisedr
+WorkingDirectory=/opt/aegisedr
+Environment=AEGISEDR_DB=/opt/aegisedr/data/aegisedr.db
+Environment=AEGISEDR_YARA=/opt/aegisedr/yara_rules
+Environment=AEGISEDR_QUARANTINE=/opt/aegisedr/quarantine
+ExecStart=/opt/aegisedr/venv/bin/python main.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

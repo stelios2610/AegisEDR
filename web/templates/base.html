@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}AegisEDR{% endblock %}</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --bg2: #141720;
+    --bg3: #1c2030;
+    --border: #2a2f3e;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --accent: #6366f1;
+    --accent2: #818cf8;
+    --red: #ef4444;
+    --red2: #fca5a5;
+    --orange: #f97316;
+    --yellow: #eab308;
+    --green: #22c55e;
+    --green2: #86efac;
+    --blue: #3b82f6;
+    --purple: #a855f7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 240px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; position: fixed; top: 0; left: 0; height: 100vh; z-index: 100; overflow-y: auto; }
+  .sidebar-logo { padding: 20px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .sidebar-logo .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent), var(--purple)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .sidebar-logo .logo-text { font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
+  .sidebar-logo .logo-sub { font-size: 11px; color: var(--text2); }
+  .sidebar-nav { flex: 1; padding: 12px 8px; }
+  .nav-section { font-size: 10px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; padding: 12px 8px 6px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--text2); text-decoration: none; font-size: 14px; transition: all 0.15s; margin-bottom: 2px; }
+  .nav-item:hover { background: var(--bg3); color: var(--text); }
+  .nav-item.active { background: var(--accent); color: white; }
+  .nav-item .nav-icon { width: 18px; text-align: center; font-size: 16px; }
+  .nav-badge { margin-left: auto; background: var(--red); color: white; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; }
+  .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text2); }
+
+  /* Main */
+  .main { margin-left: 240px; flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+  .topbar { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+  .topbar-title { font-size: 18px; font-weight: 600; }
+  .topbar-right { display: flex; align-items: center; gap: 16px; }
+  .topbar-user { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text2); }
+  .topbar-user .avatar { width: 30px; height: 30px; background: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 700; }
+  .content { padding: 24px; flex: 1; }
+
+  /* Cards */
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; }
+  .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .card-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .card-body { padding: 20px; }
+
+  /* Stats grid */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+  .stat-label { font-size: 12px; color: var(--text2); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-size: 32px; font-weight: 700; line-height: 1; }
+  .stat-sub { font-size: 12px; color: var(--text2); }
+  .stat-card.red { border-color: rgba(239,68,68,.3); }
+  .stat-card.red .stat-value { color: var(--red); }
+  .stat-card.green { border-color: rgba(34,197,94,.3); }
+  .stat-card.green .stat-value { color: var(--green); }
+  .stat-card.blue { border-color: rgba(59,130,246,.3); }
+  .stat-card.blue .stat-value { color: var(--blue); }
+  .stat-card.purple { border-color: rgba(168,85,247,.3); }
+  .stat-card.purple .stat-value { color: var(--purple); }
+  .stat-card.orange { border-color: rgba(249,115,22,.3); }
+  .stat-card.orange .stat-value { color: var(--orange); }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; }
+  th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2); border-bottom: 1px solid var(--border); }
+  td { padding: 12px 14px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg3); }
+
+  /* Badges */
+  .badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+  .badge-critical { background: rgba(239,68,68,.2); color: var(--red); }
+  .badge-high { background: rgba(249,115,22,.2); color: var(--orange); }
+  .badge-medium { background: rgba(234,179,8,.2); color: var(--yellow); }
+  .badge-low { background: rgba(34,197,94,.15); color: var(--green); }
+  .badge-online { background: rgba(34,197,94,.15); color: var(--green); }
+  .badge-offline { background: rgba(148,163,184,.1); color: var(--text2); }
+  .badge-active { background: rgba(239,68,68,.15); color: var(--red); }
+  .badge-resolved { background: rgba(34,197,94,.15); color: var(--green); }
+  .badge-ransomware { background: rgba(239,68,68,.25); color: #ff8080; }
+  .badge-spyware { background: rgba(168,85,247,.2); color: var(--purple); }
+  .badge-malware { background: rgba(249,115,22,.2); color: var(--orange); }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; text-decoration: none; transition: all 0.15s; }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-danger { background: rgba(239,68,68,.15); color: var(--red); border: 1px solid rgba(239,68,68,.3); }
+  .btn-danger:hover { background: var(--red); color: white; }
+  .btn-success { background: rgba(34,197,94,.15); color: var(--green); border: 1px solid rgba(34,197,94,.3); }
+  .btn-success:hover { background: var(--green); color: white; }
+  .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: var(--bg3); color: var(--text); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  /* Forms */
+  input, select, textarea { background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 8px; font-size: 13px; font-family: inherit; width: 100%; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  label { font-size: 12px; font-weight: 500; color: var(--text2); display: block; margin-bottom: 4px; }
+  .form-group { margin-bottom: 16px; }
+
+  /* Modal */
+  .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 1000; align-items: center; justify-content: center; }
+  .modal-backdrop.open { display: flex; }
+  .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 24px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; }
+  .modal-title { font-size: 16px; font-weight: 600; margin-bottom: 20px; }
+
+  /* Alerts */
+  .alert { padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+  .alert-success { background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.3); color: var(--green); }
+  .alert-error { background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3); color: var(--red); }
+
+  /* Grid layouts */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+  .text-muted { color: var(--text2); font-size: 12px; }
+  .mt-4 { margin-top: 16px; }
+  .mb-4 { margin-bottom: 16px; }
+  .flex { display: flex; }
+  .items-center { align-items: center; }
+  .gap-2 { gap: 8px; }
+  .gap-3 { gap: 12px; }
+  .ml-auto { margin-left: auto; }
+  .font-mono { font-family: 'Cascadia Code', 'Consolas', monospace; }
+  code { background: var(--bg3); padding: 2px 6px; border-radius: 4px; font-size: 12px; font-family: monospace; }
+
+  @media (max-width: 900px) {
+    .sidebar { width: 60px; }
+    .sidebar-logo .logo-text, .sidebar-logo .logo-sub, .nav-section, .nav-item span { display: none; }
+    .main { margin-left: 60px; }
+  }
+</style>
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon" style="background:linear-gradient(135deg,#6366f1,#a855f7);border-radius:8px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:900;color:white;font-family:'Arial Black',sans-serif;flex-shrink:0;">A</div>
+    <div>
+      <div class="logo-text" style="font-size:17px;font-weight:900;letter-spacing:-0.5px;">AEGIS<span style="color:#818cf8;">EDR</span></div>
+      <div class="logo-sub">Security Console</div>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">Overview</div>
+    <a href="/" class="nav-item {% if request.url.path == '/' %}active{% endif %}">
+      <span class="nav-icon">📊</span><span>Dashboard</span>
+    </a>
+    <div class="nav-section">Security</div>
+    <a href="/scan" class="nav-item {% if '/scan' in request.url.path %}active{% endif %}">
+      <span class="nav-icon">🔎</span><span>Scan Console</span>
+    </a>
+    <a href="/threats" class="nav-item {% if '/threats' in request.url.path %}active{% endif %}">
+      <span class="nav-icon">⚠️</span><span>Threats</span>
+    </a>
+    <a href="/quarantine" class="nav-item {% if '/quarantine' in request.url.path %}active{% endif %}">
+      <span class="nav-icon">🔒</span><span>Quarantine</span>
+    </a>
+    <a href="/yara" class="nav-item {% if '/yara' in request.url.path %}active{% endif %}">
+      <span class="nav-icon">🔍</span><span>YARA Rules</span>
+    </a>
+    <a href="/ioc" class="nav-item {% if '/ioc' in request.url.path %}active{% endif %}">
+      <span class="nav-icon">🌐</span><span>IoC Feeds</span>
+    </a>
+    <div class="nav-section">Management</div>
+    <a href="/endpoints" class="nav-item {% if '/endpoints' in request.url.path %}active{% endif %}">
+      <span class="nav-icon">💻</span><span>Endpoints</span>
+      {% if pending_count is defined and pending_count > 0 %}
+      <span class="nav-badge">{{ pending_count }}</span>
+      {% endif %}
+    </a>
+    <a href="/settings" class="nav-item {% if '/settings' in request.url.path %}active{% endif %}">
+      <span class="nav-icon">⚙️</span><span>Settings</span>
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <div>v1.0.0 — AegisEDR</div>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title">{% block page_title %}Dashboard{% endblock %}</div>
+    <div class="topbar-right">
+      <div id="clock" class="text-muted font-mono" style="font-size:13px;"></div>
+      <div class="topbar-user">
+        <div class="avatar">{{ user.sub[0].upper() if user else 'A' }}</div>
+        <span>{{ user.sub if user else 'Admin' }}</span>
+        <form method="post" action="/logout" style="display:inline;">
+          <button type="submit" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:13px;padding:4px 8px;border-radius:6px;" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text2)'">Logout</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="content">
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+<script>
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('el-GR', {hour12: false});
+}
+setInterval(updateClock, 1000); updateClock();
+
+async function api(method, url, data) {
+  const opts = { method, headers: {'Content-Type': 'application/json'} };
+  if (data) opts.body = JSON.stringify(data);
+  const r = await fetch(url, opts);
+  return r.json();
+}
+
+function showAlert(msg, type = 'success') {
+  const a = document.createElement('div');
+  a.className = `alert alert-${type}`;
+  a.textContent = msg;
+  document.querySelector('.content').prepend(a);
+  setTimeout(() => a.remove(), 4000);
+}
+</script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

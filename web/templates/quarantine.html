@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Quarantine — AegisEDR{% endblock %}
+{% block page_title %}Quarantine{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+  <div class="text-muted">{{ items|length }} files in quarantine</div>
+</div>
+
+<div class="card">
+  <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Original Path</th><th>Threat</th><th>Endpoint</th><th>Hash</th><th>Quarantined</th><th>Status</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr id="q{{ item.id }}">
+          <td><code style="font-size:11px;">{{ item.original_path }}</code></td>
+          <td><span class="badge badge-malware">{{ item.threat_name or 'Unknown' }}</span></td>
+          <td>{{ item.hostname or 'Unknown' }}</td>
+          <td><code style="font-size:10px;">{{ item.file_hash[:16] if item.file_hash else 'N/A' }}...</code></td>
+          <td class="text-muted">{{ item.quarantined_at[:16] }}</td>
+          <td>
+            {% if item.restored %}
+              <span class="badge badge-resolved">Restored</span>
+            {% else %}
+              <span class="badge badge-active">Isolated</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if not item.restored %}
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-success btn-sm" onclick="restoreItem({{ item.id }})" title="Restore">↩</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteItem({{ item.id }})" title="Delete">🗑</button>
+            </div>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" style="text-align:center;color:var(--green);padding:32px;">✓ Quarantine is empty</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function restoreItem(id) {
+  if (!confirm('Restore this file? Make sure the threat is neutralized.')) return;
+  await api('POST', `/api/quarantine/${id}/restore`);
+  document.querySelector(`#q${id} td:nth-child(6)`).innerHTML = '<span class="badge badge-resolved">Restored</span>';
+  document.querySelector(`#q${id} td:last-child`).innerHTML = '';
+}
+
+async function deleteItem(id) {
+  if (!confirm('Permanently delete this file?')) return;
+  await api('DELETE', `/api/quarantine/${id}`);
+  document.getElementById(`q${id}`).remove();
+}
+</script>
+{% endblock %}

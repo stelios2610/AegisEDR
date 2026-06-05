@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+{% block title %}Scan Console — AegisEDR{% endblock %}
+{% block page_title %}Scan Console{% endblock %}
+
+{% block extra_head %}
+<style>
+  .console-wrap { background: #0a0c10; border: 1px solid var(--border); border-radius: 12px; padding: 0; overflow: hidden; }
+  .console-toolbar { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .console-out { font-family: 'Cascadia Code','Consolas',monospace; font-size: 12px; line-height: 1.6; padding: 16px; height: 420px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+  .log-info    { color: #94a3b8; }
+  .log-ok      { color: #22c55e; }
+  .log-warn    { color: #eab308; }
+  .log-threat  { color: #ef4444; font-weight: 600; }
+  .log-scan    { color: #6366f1; }
+  .log-system  { color: #64748b; font-style: italic; }
+  .log-ts      { color: #475569; margin-right: 8px; }
+  .pulse { animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .stat-mini { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; text-align: center; min-width: 90px; }
+  .stat-mini .val { font-size: 22px; font-weight: 700; }
+  .stat-mini .lbl { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Top stats -->
+<div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+  <div class="stat-mini"><div class="val" id="s-scanned" style="color:var(--blue)">0</div><div class="lbl">Files Scanned</div></div>
+  <div class="stat-mini"><div class="val" id="s-threats" style="color:var(--red)">0</div><div class="lbl">Threats Found</div></div>
+  <div class="stat-mini"><div class="val" id="s-clean" style="color:var(--green)">0</div><div class="lbl">Clean</div></div>
+  <div class="stat-mini"><div class="val" id="s-quarantined" style="color:var(--orange)">0</div><div class="lbl">Quarantined</div></div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+    <span id="ws-status" class="badge badge-offline">● Disconnected</span>
+  </div>
+</div>
+
+<!-- Scan launcher -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header"><span class="card-title">🚀 Launch Scan</span></div>
+  <div class="card-body" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+    <div>
+      <label>Endpoint</label>
+      <select id="scan-endpoint" style="width:200px;">
+        <option value="">All online endpoints</option>
+        {% for ep in endpoints %}
+        {% if ep.approved and ep.status == 'online' %}
+        <option value="{{ ep.id }}">{{ ep.hostname }} ({{ ep.ip_address }})</option>
+        {% endif %}
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Scan Type</label>
+      <select id="scan-type" style="width:160px;">
+        <option value="quick">Quick Scan</option>
+        <option value="full">Full Scan</option>
+        <option value="custom">Custom Path</option>
+        <option value="memory">Memory Scan</option>
+        <option value="rootkit">Rootkit Check</option>
+      </select>
+    </div>
+    <div id="custom-path-wrap" style="display:none;">
+      <label>Path</label>
+      <input type="text" id="custom-path" placeholder="/home or C:\Users" style="width:220px;">
+    </div>
+    <button class="btn btn-primary" id="scan-btn" onclick="startScan()">▶ Start Scan</button>
+    <button class="btn btn-ghost"   onclick="clearConsole()">🗑 Clear</button>
+  </div>
+</div>
+
+<!-- Live console -->
+<div class="console-wrap">
+  <div class="console-toolbar">
+    <span style="font-size:12px;font-weight:600;color:var(--text2);">LIVE OUTPUT</span>
+    <span id="scan-progress" style="font-size:12px;color:var(--text2);"></span>
+    <div style="margin-left:auto;display:flex;gap:8px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin:0;">
+        <input type="checkbox" id="auto-scroll" checked> Auto-scroll
+      </label>
+      <button class="btn btn-ghost btn-sm" onclick="exportLog()">⬇ Export</button>
+    </div>
+  </div>
+  <div class="console-out" id="console-out">
+<span class="log-system">AegisEDR Scan Console ready. Select an endpoint and click Start Scan.</span>
+  </div>
+</div>
+
+<!-- Recent scan history -->
+<div class="card" style="margin-top:20px;">
+  <div class="card-header">
+    <span class="card-title">📋 Scan History</span>
+    <button class="btn btn-ghost btn-sm" onclick="loadHistory()">Refresh</button>
+  </div>
+  <div style="overflow-x:auto;">
+    <table id="history-table">
+      <thead>
+        <tr><th>Endpoint</th><th>Type</th><th>Status</th><th>Files</th><th>Threats</th><th>Started</th><th>Duration</th></tr>
+      </thead>
+      <tbody id="history-body">
+        {% for job in scan_jobs %}
+        <tr>
+          <td>{{ job.hostname or 'Unknown' }}</td>
+          <td><span class="badge badge-medium">{{ job.scan_type }}</span></td>
+          <td><span class="badge badge-{{ 'online' if job.status == 'completed' else 'offline' }}">{{ job.status }}</span></td>
+          <td>{{ job.files_scanned }}</td>
+          <td>
+            {% if job.threats_found > 0 %}
+            <span class="badge badge-critical">{{ job.threats_found }}</span>
+            {% else %}
+            <span style="color:var(--green)">✓ 0</span>
+            {% endif %}
+          </td>
+          <td class="text-muted">{{ job.started_at[:16] if job.started_at else '—' }}</td>
+          <td class="text-muted">
+            {% if job.started_at and job.completed_at %}
+              {{ ((job.completed_at | string)[:19] | replace('T',' ')) }}
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text2);">No scans yet</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let ws = null;
+let scanStats = {scanned: 0, threats: 0, clean: 0, quarantined: 0};
+let currentJobId = null;
+
+// ── WebSocket ──────────────────────────────────────────────────────────────
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws/scan`);
+
+  ws.onopen = () => {
+    setWsStatus(true);
+    log('system', 'Connected to AegisEDR console');
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      const ev = JSON.parse(e.data);
+      handleEvent(ev);
+    } catch(err) {}
+  };
+
+  ws.onclose = () => {
+    setWsStatus(false);
+    log('system', 'Connection lost — reconnecting in 5s...');
+    setTimeout(connectWS, 5000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+function setWsStatus(ok) {
+  const el = document.getElementById('ws-status');
+  el.className = ok ? 'badge badge-online' : 'badge badge-offline';
+  el.textContent = ok ? '● Connected' : '● Disconnected';
+}
+
+// ── Event handler ──────────────────────────────────────────────────────────
+function handleEvent(ev) {
+  const ts = (ev.timestamp || new Date().toISOString()).substring(11,19);
+
+  if (ev.type === 'scan_start') {
+    scanStats = {scanned: 0, threats: 0, clean: 0, quarantined: 0};
+    updateStats();
+    log('scan', `[${ev.endpoint}] Scan started: ${ev.scan_type} on ${ev.target_path || '/'}`);
+    document.getElementById('scan-progress').textContent = 'Scanning...';
+  }
+  else if (ev.type === 'scan_progress') {
+    scanStats.scanned = ev.files_scanned || scanStats.scanned;
+    updateStats();
+    if (ev.current_file) log('info', `  Scanning: ${ev.current_file}`);
+    document.getElementById('scan-progress').textContent = `${scanStats.scanned} files scanned`;
+  }
+  else if (ev.type === 'scan_threat') {
+    scanStats.threats++;
+    updateStats();
+    log('threat', `  ⚠ THREAT: [${ev.severity?.toUpperCase()}] ${ev.name} → ${ev.file_path || ev.process_name || ''}`);
+    if (ev.action === 'quarantined') {
+      scanStats.quarantined++;
+      updateStats();
+      log('warn', `  → Quarantined automatically`);
+    }
+  }
+  else if (ev.type === 'scan_complete') {
+    scanStats.scanned = ev.files_scanned || scanStats.scanned;
+    scanStats.threats = ev.threats_found || scanStats.threats;
+    scanStats.clean = scanStats.scanned - scanStats.threats;
+    updateStats();
+    const dur = ev.duration_seconds ? `${ev.duration_seconds.toFixed(1)}s` : '';
+    log('ok', `[${ev.endpoint}] Scan complete — ${scanStats.scanned} files, ${scanStats.threats} threats ${dur}`);
+    document.getElementById('scan-progress').textContent = `Done in ${dur}`;
+    document.getElementById('scan-btn').disabled = false;
+    document.getElementById('scan-btn').textContent = '▶ Start Scan';
+    setTimeout(loadHistory, 1000);
+  }
+  else if (ev.type === 'threat') {
+    // Real-time threat from agent monitoring (not scan)
+    log('threat', `  🚨 REAL-TIME: [${ev.severity?.toUpperCase()}] ${ev.name} on ${ev.endpoint || 'endpoint'}`);
+  }
+  else if (ev.type === 'agent_online') {
+    log('ok', `  ✓ Agent online: ${ev.hostname} (${ev.ip})`);
+  }
+  else if (ev.type === 'agent_offline') {
+    log('warn', `  ✗ Agent offline: ${ev.hostname}`);
+  }
+}
+
+// ── Console output ─────────────────────────────────────────────────────────
+function log(level, message) {
+  const out = document.getElementById('console-out');
+  const ts = new Date().toLocaleTimeString('en-GB', {hour12:false});
+  const cls = {
+    info:'log-info', ok:'log-ok', warn:'log-warn',
+    threat:'log-threat', scan:'log-scan', system:'log-system'
+  }[level] || 'log-info';
+  const line = document.createElement('div');
+  line.innerHTML = `<span class="log-ts">${ts}</span><span class="${cls}">${escHtml(message)}</span>`;
+  out.appendChild(line);
+  if (document.getElementById('auto-scroll').checked) {
+    out.scrollTop = out.scrollHeight;
+  }
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function clearConsole() {
+  document.getElementById('console-out').innerHTML = '<span class="log-system">Console cleared.</span>';
+  scanStats = {scanned:0, threats:0, clean:0, quarantined:0};
+  updateStats();
+  document.getElementById('scan-progress').textContent = '';
+}
+
+function updateStats() {
+  document.getElementById('s-scanned').textContent = scanStats.scanned.toLocaleString();
+  document.getElementById('s-threats').textContent = scanStats.threats;
+  document.getElementById('s-clean').textContent = (scanStats.scanned - scanStats.threats).toLocaleString();
+  document.getElementById('s-quarantined').textContent = scanStats.quarantined;
+}
+
+function exportLog() {
+  const lines = [...document.querySelectorAll('#console-out div')]
+    .map(d => d.textContent).join('\n');
+  const blob = new Blob([lines], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `aegisedr-scan-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+  a.click();
+}
+
+// ── Scan launch ────────────────────────────────────────────────────────────
+async function startScan() {
+  const epId    = document.getElementById('scan-endpoint').value;
+  const type    = document.getElementById('scan-type').value;
+  const path    = document.getElementById('custom-path').value.trim() || '/';
+  const btn     = document.getElementById('scan-btn');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Scanning...';
+
+  log('scan', `Starting ${type} scan${epId ? ' on endpoint #'+epId : ' on all endpoints'}...`);
+
+  try {
+    const r = await fetch('/api/scan/start', {
+      method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({endpoint_id: epId ? parseInt(epId) : null, scan_type: type, target_path: path})
+    });
+    const data = await r.json();
+    if (data.status === 'ok') {
+      log('ok', `Scan queued — job ID: ${data.job_id}`);
+      currentJobId = data.job_id;
+    } else {
+      log('warn', `Error: ${data.message || 'Unknown error'}`);
+      btn.disabled = false;
+      btn.textContent = '▶ Start Scan';
+    }
+  } catch(e) {
+    log('warn', 'Request failed: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '▶ Start Scan';
+  }
+}
+
+// ── Scan history ───────────────────────────────────────────────────────────
+async function loadHistory() {
+  try {
+    const r = await fetch('/api/scan/jobs?limit=20', {credentials:'same-origin'});
+    const jobs = await r.json();
+    const tbody = document.getElementById('history-body');
+    if (!jobs.length) return;
+    tbody.innerHTML = jobs.map(j => `
+      <tr>
+        <td>${j.hostname || 'Unknown'}</td>
+        <td><span class="badge badge-medium">${j.scan_type}</span></td>
+        <td><span class="badge badge-${j.status==='completed'?'online':'offline'}">${j.status}</span></td>
+        <td>${(j.files_scanned||0).toLocaleString()}</td>
+        <td>${j.threats_found > 0 ? `<span class="badge badge-critical">${j.threats_found}</span>` : '<span style="color:var(--green)">✓ 0</span>'}</td>
+        <td class="text-muted">${(j.started_at||'—').substring(0,16)}</td>
+        <td class="text-muted">${j.duration || '—'}</td>
+      </tr>`).join('');
+  } catch(e) {}
+}
+
+// ── Custom path toggle ─────────────────────────────────────────────────────
+document.getElementById('scan-type').addEventListener('change', function() {
+  document.getElementById('custom-path-wrap').style.display =
+    this.value === 'custom' ? 'block' : 'none';
+});
+
+// ── Init ───────────────────────────────────────────────────────────────────
+connectWS();
+loadHistory();
+</script>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}IoC Feeds — AegisEDR{% endblock %}
+{% block page_title %}IoC Feeds{% endblock %}
+
+{% block content %}
+<div class="stats-grid" style="margin-bottom:20px;">
+  <div class="stat-card red">
+    <div class="stat-label">Malicious IPs</div>
+    <div class="stat-value">{{ "{:,}".format(ip_count) }}</div>
+  </div>
+  <div class="stat-card orange">
+    <div class="stat-label">Malicious Domains</div>
+    <div class="stat-value">{{ "{:,}".format(domain_count) }}</div>
+  </div>
+  <div class="stat-card purple">
+    <div class="stat-label">File Hashes</div>
+    <div class="stat-value">{{ "{:,}".format(hash_count) }}</div>
+  </div>
+</div>
+
+<div class="grid-2" style="gap:20px;margin-bottom:20px;">
+  <!-- Feeds -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">🌐 Feed Sources</span>
+      <button class="btn btn-primary btn-sm" onclick="updateFeeds(this)">↻ Update All</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr><th>Feed</th><th>Type</th><th>Entries</th><th>Last Update</th></tr>
+        </thead>
+        <tbody>
+          {% for feed in feeds %}
+          <tr>
+            <td>
+              <div style="font-weight:600;font-size:13px;">{{ feed.name }}</div>
+              <div class="text-muted" style="font-size:11px;">{{ feed.url[:50] }}...</div>
+            </td>
+            <td><span class="badge badge-medium">{{ feed.feed_type }}</span></td>
+            <td>{{ "{:,}".format(feed.entry_count) }}</td>
+            <td class="text-muted">{{ feed.last_updated[:16] if feed.last_updated else 'Never' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text2);">No feeds configured</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Recent IoCs -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">🔴 Recent Indicators</span></div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr><th>Value</th><th>Type</th><th>Threat</th><th>Severity</th></tr>
+        </thead>
+        <tbody>
+          {% for ioc in recent %}
+          <tr>
+            <td><code style="font-size:11px;">{{ ioc.value[:30] }}</code></td>
+            <td><span class="badge badge-medium">{{ ioc.ioc_type }}</span></td>
+            <td class="text-muted">{{ ioc.threat_name or '—' }}</td>
+            <td><span class="badge badge-{{ ioc.severity }}">{{ ioc.severity }}</span></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text2);">No indicators loaded</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- IoC Lookup -->
+<div class="card">
+  <div class="card-header"><span class="card-title">🔍 Manual IoC Lookup</span></div>
+  <div class="card-body">
+    <div style="display:flex;gap:12px;align-items:flex-end;">
+      <div style="flex:1;">
+        <label>IP / Domain / Hash</label>
+        <input type="text" id="iocLookup" placeholder="8.8.8.8 or malware.example.com or d41d8cd98f00b204e9800998ecf8427e">
+      </div>
+      <div>
+        <label>Type</label>
+        <select id="iocType" style="width:130px;">
+          <option value="ip">IP</option>
+          <option value="domain">Domain</option>
+          <option value="hash">Hash</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="lookupIoc()">Check</button>
+    </div>
+    <div id="lookupResult" style="margin-top:14px;"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function updateFeeds(btn) {
+  btn.textContent = '⏳ Updating...';
+  btn.disabled = true;
+  await api('POST', '/api/ioc/feeds/update');
+  btn.textContent = '✓ Started';
+  setTimeout(() => { btn.textContent = '↻ Update All'; btn.disabled = false; }, 3000);
+}
+
+async function lookupIoc() {
+  const value = document.getElementById('iocLookup').value.trim();
+  const type = document.getElementById('iocType').value;
+  if (!value) return;
+  const res = await api('POST', '/api/ioc/check', {value, type});
+  const div = document.getElementById('lookupResult');
+  if (res.found) {
+    div.innerHTML = `<div class="alert alert-error">⚠️ MALICIOUS — ${res.threat.threat_name || 'Known threat'} (${res.threat.severity}) — Source: ${res.threat.source}</div>`;
+  } else {
+    div.innerHTML = `<div class="alert alert-success">✓ Not found in IoC database</div>`;
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Endpoints — AegisEDR{% endblock %}
+{% block page_title %}Endpoints{% endblock %}
+
+{% block content %}
+
+{% set pending = endpoints | selectattr("approved", "equalto", 0) | list %}
+{% set adopted = endpoints | selectattr("approved", "equalto", 1) | list %}
+
+<!-- Pending Adoption Banner -->
+{% if pending %}
+<div style="background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.3);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:12px;">
+  <span style="font-size:22px;">⏳</span>
+  <div>
+    <div style="font-weight:600;color:var(--yellow);">{{ pending|length }} endpoint(s) waiting for adoption</div>
+    <div class="text-muted">Review and adopt or reject new agents below.</div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:24px;border-color:rgba(234,179,8,.3);">
+  <div class="card-header" style="border-color:rgba(234,179,8,.3);">
+    <span class="card-title" style="color:var(--yellow);">⏳ Pending Adoption</span>
+    <span class="text-muted">{{ pending|length }} agent(s)</span>
+  </div>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Hostname</th><th>IP Address</th><th>OS</th><th>Agent Version</th><th>Requested</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for ep in pending %}
+        <tr id="ep{{ ep.id }}">
+          <td style="font-weight:600;">{{ ep.hostname }}</td>
+          <td><code>{{ ep.ip_address }}</code></td>
+          <td class="text-muted">{{ ep.os_type }} {{ ep.os_version }}</td>
+          <td class="text-muted">v{{ ep.agent_version or '?' }}</td>
+          <td class="text-muted">{{ ep.registered_at[:16] if ep.registered_at else '—' }}</td>
+          <td>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-success btn-sm" onclick="adoptEndpoint({{ ep.id }})">✓ Adopt</button>
+              <button class="btn btn-danger btn-sm" onclick="rejectEndpoint({{ ep.id }})">✕ Reject</button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Active Endpoints -->
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+  <input type="text" id="searchInput" placeholder="Search endpoints..." style="max-width:300px;" oninput="filterTable()">
+  <div class="ml-auto text-muted">{{ adopted|length }} adopted endpoint(s)</div>
+</div>
+
+<div class="card">
+  <div style="overflow-x:auto;">
+    <table id="endpTable">
+      <thead>
+        <tr><th>Hostname</th><th>IP</th><th>OS</th><th>Agent</th><th>Status</th><th>Threats</th><th>Last Seen</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for ep in adopted %}
+        <tr data-name="{{ ep.hostname|lower }}">
+          <td style="font-weight:600;">{{ ep.hostname }}</td>
+          <td><code>{{ ep.ip_address }}</code></td>
+          <td class="text-muted">{{ ep.os_type }} {{ ep.os_version }}</td>
+          <td class="text-muted">v{{ ep.agent_version or '?' }}</td>
+          <td><span class="badge badge-{{ ep.status }}">{{ ep.status }}</span></td>
+          <td>
+            {% if ep.active_threats > 0 %}
+              <span class="badge badge-critical">{{ ep.active_threats }}</span>
+            {% else %}
+              <span style="color:var(--green);font-size:13px;">✓ Clean</span>
+            {% endif %}
+          </td>
+          <td class="text-muted">{{ ep.last_seen[:16] if ep.last_seen else 'Never' }}</td>
+          <td>
+            <button class="btn btn-danger btn-sm" onclick="deleteEndpoint({{ ep.id }}, this)">✕</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" style="text-align:center;color:var(--text2);padding:32px;">No adopted endpoints yet</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Agent Install Instructions -->
+<div class="card mt-4">
+  <div class="card-header"><span class="card-title">🚀 Install Agent on Endpoint</span></div>
+  <div class="card-body">
+    <div style="margin-bottom:16px;">
+      <label>Console IP / Hostname</label>
+      <input type="text" id="consoleIp" placeholder="e.g. 192.168.1.100" style="max-width:280px;" value="{{ request.headers.get('host','').split(':')[0] }}">
+    </div>
+
+    <!-- Direct Downloads -->
+    <div style="font-weight:600;margin-bottom:10px;">📦 Download Agent Installer</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
+      <a id="dlLinux" href="#" class="btn" style="background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.4);color:var(--green);text-decoration:none;" download>
+        🐧 Linux Agent (.sh)
+      </a>
+      <a id="dlWindows" href="#" class="btn" style="background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.4);color:var(--accent2);text-decoration:none;" download>
+        🪟 Windows Agent (.msi)
+      </a>
+    </div>
+
+    <!-- One-liner commands -->
+    <div style="font-weight:600;margin-bottom:10px;">⚡ Or install via one-liner</div>
+    <div class="grid-2">
+      <div>
+        <div style="font-weight:600;margin-bottom:8px;color:var(--green);">🐧 Linux (Ubuntu/Debian)</div>
+        <pre id="linuxCmd" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;overflow-x:auto;cursor:pointer;white-space:pre-wrap;word-break:break-all;" onclick="copyCmd('linuxCmd')"><code>curl -fsSLk https://<span class="console-ip">CONSOLE_IP</span>/agent/install.sh | sudo bash -s -- <span class="console-ip">CONSOLE_IP</span></code></pre>
+        <div class="text-muted" style="margin-top:4px;">Click to copy</div>
+      </div>
+      <div>
+        <div style="font-weight:600;margin-bottom:8px;color:var(--accent2);">🪟 Windows (PowerShell Admin)</div>
+        <pre id="winCmd" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;overflow-x:auto;cursor:pointer;white-space:pre-wrap;word-break:break-all;" onclick="copyCmd('winCmd')"><code>[Net.ServicePointManager]::ServerCertificateValidationCallback={$true}; $url='https://<span class="console-ip">CONSOLE_IP</span>/agent/install.ps1'; iex (iwr $url -UseBasicParsing).Content</code></pre>
+        <div class="text-muted" style="margin-top:4px;">Click to copy</div>
+      </div>
+    </div>
+
+    <div class="alert" style="background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.3);color:var(--accent2);margin-top:16px;">
+      💡 After installation, the agent appears above in "Pending Adoption". Click <strong>Adopt</strong> to activate protection.
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Update console IP in commands and download links
+document.getElementById('consoleIp').addEventListener('input', function() {
+  const ip = this.value.trim() || 'CONSOLE_IP';
+  document.querySelectorAll('.console-ip').forEach(el => el.textContent = ip);
+  document.getElementById('dlLinux').href = `https://${ip}/agent/install.sh`;
+  document.getElementById('dlWindows').href = `https://${ip}/agent/AegisEDR-Agent-1.0.0-x64.msi`;
+});
+document.getElementById('consoleIp').dispatchEvent(new Event('input'));
+
+function filterTable() {
+  const s = document.getElementById('searchInput').value.toLowerCase();
+  document.querySelectorAll('#endpTable tbody tr[data-name]').forEach(r => {
+    r.style.display = !s || r.dataset.name.includes(s) ? '' : 'none';
+  });
+}
+
+async function adoptEndpoint(id) {
+  await api('POST', `/api/endpoints/${id}/adopt`);
+  const row = document.getElementById(`ep${id}`);
+  row.style.background = 'rgba(34,197,94,.1)';
+  row.querySelector('td:last-child').innerHTML = '<span class="badge badge-online">Adopted ✓</span>';
+  setTimeout(() => location.reload(), 1200);
+}
+
+async function rejectEndpoint(id) {
+  if (!confirm('Reject and delete this agent?')) return;
+  await api('POST', `/api/endpoints/${id}/reject`);
+  document.getElementById(`ep${id}`).remove();
+}
+
+async function deleteEndpoint(id, btn) {
+  if (!confirm('Remove this endpoint?')) return;
+  await api('DELETE', `/api/endpoints/${id}`);
+  btn.closest('tr').remove();
+}
+
+function copyCmd(id) {
+  const text = document.getElementById(id).textContent.trim();
+  navigator.clipboard.writeText(text).then(() => showAlert('Command copied!'));
+}
+
+// Auto-refresh every 15s to catch new pending agents
+setTimeout(() => location.reload(), 15000);
+</script>
+{% endblock %}

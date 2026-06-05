@@ -1,0 +1,13 @@
+dist/
+__pycache__/
+*.pyc
+*.pyo
+*.exe
+*.msi
+*.wixpdb
+*.spec
+downloads/
+*.db
+*.log
+.env
+venv/

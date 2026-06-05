@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 160">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="shieldGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#818cf8;stop-opacity:0.3"/>
+      <stop offset="100%" style="stop-color:#c084fc;stop-opacity:0.1"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#6366f1" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Shield body -->
+  <g filter="url(#shadow)">
+    <path d="M80 18 L148 42 L148 90 Q148 138 80 158 Q12 138 12 90 L12 42 Z"
+          fill="url(#shieldGrad)" />
+    <!-- Inner shield highlight -->
+    <path d="M80 28 L138 48 L138 90 Q138 130 80 148 Q22 130 22 90 L22 48 Z"
+          fill="url(#shieldGrad2)" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
+  </g>
+
+  <!-- Shield border accent -->
+  <path d="M80 18 L148 42 L148 90 Q148 138 80 158 Q12 138 12 90 L12 42 Z"
+        fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+
+  <!-- Letter A inside shield -->
+  <text x="80" y="116"
+        font-family="'Arial Black', 'Impact', sans-serif"
+        font-size="80" font-weight="900"
+        text-anchor="middle"
+        fill="white"
+        opacity="0.95"
+        filter="url(#glow)">A</text>
+
+  <!-- Horizontal bar on A (custom touch) -->
+  <rect x="50" y="97" width="60" height="5" rx="2.5" fill="rgba(255,255,255,0.9)"/>
+
+  <!-- AEGISEDR text -->
+  <text x="178" y="88"
+        font-family="'Arial Black', 'Segoe UI', sans-serif"
+        font-size="46" font-weight="900"
+        fill="#e2e8f0"
+        letter-spacing="-1">AEGIS</text>
+
+  <text x="178" y="133"
+        font-family="'Arial Black', 'Segoe UI', sans-serif"
+        font-size="46" font-weight="900"
+        fill="url(#shieldGrad)"
+        letter-spacing="-1">EDR</text>
+
+  <!-- Tagline -->
+  <text x="182" y="153"
+        font-family="'Segoe UI', Arial, sans-serif"
+        font-size="13" font-weight="400"
+        fill="#64748b"
+        letter-spacing="3">ENDPOINT  SECURITY</text>
+</svg>

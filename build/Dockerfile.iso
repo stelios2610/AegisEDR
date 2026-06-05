@@ -1,0 +1,20 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    xorriso \
+    squashfs-tools \
+    p7zip-full \
+    rsync \
+    curl \
+    wget \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# The build script will be mounted via the project volume
+# Ubuntu ISO mounted at: /ubuntu.iso
+# Project source at:     /aegisedr
+# Output at:             /output
+
+CMD ["/bin/bash", "/aegisedr/build/build_iso_from_existing.sh"]

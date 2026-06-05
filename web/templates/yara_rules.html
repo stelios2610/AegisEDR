@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}YARA Rules — AegisEDR{% endblock %}
+{% block page_title %}YARA Rules{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+  <button class="btn btn-primary" onclick="openModal()">+ Add Rule</button>
+  <a href="/api/yara/export" class="btn btn-ghost" target="_blank">⬇ Export All</a>
+  <div class="ml-auto text-muted">{{ rules|length }} rules</div>
+</div>
+
+<div class="card">
+  <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Category</th><th>Description</th><th>Hits</th><th>Status</th><th>Updated</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for r in rules %}
+        <tr id="rule{{ r.id }}">
+          <td style="font-weight:600;">{{ r.name }}</td>
+          <td><span class="badge badge-medium">{{ r.category }}</span></td>
+          <td class="text-muted">{{ r.description or '—' }}</td>
+          <td>{{ r.hit_count }}</td>
+          <td>
+            <span class="badge {% if r.enabled %}badge-online{% else %}badge-offline{% endif %}">
+              {{ 'Active' if r.enabled else 'Disabled' }}
+            </span>
+          </td>
+          <td class="text-muted">{{ r.updated_at[:10] }}</td>
+          <td>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-ghost btn-sm" onclick='editRule({{ r.id }}, {{ r|tojson }})'>✎</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteRule({{ r.id }})">✕</button>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" style="text-align:center;color:var(--text2);padding:32px;">No YARA rules defined</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-title" id="modalTitle">Add YARA Rule</div>
+    <input type="hidden" id="ruleId">
+    <div class="form-group">
+      <label>Rule Name</label>
+      <input type="text" id="ruleName" placeholder="e.g. Detect_Predator_Spyware">
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label>Category</label>
+        <select id="ruleCategory">
+          <option value="ransomware">Ransomware</option>
+          <option value="spyware">Spyware</option>
+          <option value="malware">Malware</option>
+          <option value="exploit">Exploit</option>
+          <option value="custom" selected>Custom</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="ruleEnabled">
+          <option value="1">Enabled</option>
+          <option value="0">Disabled</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <input type="text" id="ruleDesc" placeholder="What does this rule detect?">
+    </div>
+    <div class="form-group">
+      <label>YARA Rule Content</label>
+      <textarea id="ruleContent" rows="12" style="font-family:monospace;font-size:12px;" placeholder='rule Example {
+    meta:
+        description = "Detects example malware"
+        author = "AegisEDR"
+    strings:
+        $s1 = "malicious_string" nocase
+        $s2 = { 4D 5A 90 00 }
+    condition:
+        any of them
+}'></textarea>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRule()">Save Rule</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let editingId = null;
+
+function openModal() {
+  editingId = null;
+  document.getElementById('modalTitle').textContent = 'Add YARA Rule';
+  document.getElementById('ruleName').value = '';
+  document.getElementById('ruleCategory').value = 'custom';
+  document.getElementById('ruleEnabled').value = '1';
+  document.getElementById('ruleDesc').value = '';
+  document.getElementById('ruleContent').value = '';
+  document.getElementById('modal').classList.add('open');
+}
+
+function editRule(id, rule) {
+  editingId = id;
+  document.getElementById('modalTitle').textContent = 'Edit YARA Rule';
+  document.getElementById('ruleName').value = rule.name;
+  document.getElementById('ruleCategory').value = rule.category;
+  document.getElementById('ruleEnabled').value = rule.enabled;
+  document.getElementById('ruleDesc').value = rule.description || '';
+  document.getElementById('ruleContent').value = rule.rule_content;
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+async function saveRule() {
+  const data = {
+    name: document.getElementById('ruleName').value.trim(),
+    category: document.getElementById('ruleCategory').value,
+    description: document.getElementById('ruleDesc').value,
+    rule_content: document.getElementById('ruleContent').value,
+    enabled: parseInt(document.getElementById('ruleEnabled').value)
+  };
+  if (!data.name || !data.rule_content) { alert('Name and rule content required'); return; }
+  if (editingId) {
+    await api('PUT', `/api/yara/${editingId}`, data);
+  } else {
+    await api('POST', '/api/yara/add', data);
+  }
+  closeModal();
+  location.reload();
+}
+
+async function deleteRule(id) {
+  if (!confirm('Delete this rule?')) return;
+  await api('DELETE', `/api/yara/${id}`);
+  document.getElementById(`rule${id}`).remove();
+}
+
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+</script>
+{% endblock %}
