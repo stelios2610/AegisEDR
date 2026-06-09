@@ -163,11 +163,12 @@ def register_routes(app: FastAPI):
                 existing = await cur.fetchone()
 
             if existing:
-                # Re-registering — update and return same token
+                # Re-registering — keep approved status, only reset to pending if was never approved
+                new_status = "online" if existing["approved"] else "pending"
                 await db.execute("""
-                    UPDATE endpoints SET os_version=?, agent_version=?, status='pending',
+                    UPDATE endpoints SET os_version=?, agent_version=?, status=?,
                     last_seen=datetime('now') WHERE id=?
-                """, (data.get("os_version"), data.get("agent_version"), existing["id"]))
+                """, (data.get("os_version"), data.get("agent_version"), new_status, existing["id"]))
                 await db.commit()
                 return JSONResponse({
                     "token": existing["agent_token"],
