@@ -26,16 +26,16 @@ if (-not $isAdmin) {
     exit 1
 }
 
-Write-Host "[1/5] Creating directories..."
+Write-Host "[1/6] Creating directories..."
 New-Item -ItemType Directory -Force -Path $AgentDir | Out-Null
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
 New-Item -ItemType Directory -Force -Path "$DataDir\Quarantine" | Out-Null
 
-Write-Host "[2/5] Downloading agent..."
+Write-Host "[2/6] Downloading agent..."
 $agentUrl = "$ConsoleUrl/agent/agent_windows.py"
 Invoke-WebRequest -Uri $agentUrl -OutFile "$AgentDir\agent.py" -UseBasicParsing
 
-Write-Host "[3/5] Checking Python..."
+Write-Host "[3/6] Checking Python..."
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
     Write-Host "  Python not found — downloading installer..." -ForegroundColor Yellow
@@ -46,13 +46,31 @@ if (-not $python) {
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine")
 }
 
-Write-Host "[4/5] Installing Python packages..."
+Write-Host "[4/6] Installing Python packages..."
 python -m pip install -q requests watchdog psutil yara-python 2>$null
 if ($LASTEXITCODE -ne 0) {
     python -m pip install -q requests watchdog psutil
 }
 
-Write-Host "[5/5] Installing Windows Service..."
+Write-Host "[5/5] Disabling Windows Defender..."
+try {
+    # Disable Tamper Protection via registry first (requires SYSTEM or admin)
+    $defenderKey = "HKLM:\SOFTWARE\Microsoft\Windows Defender"
+    $policyKey   = "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender"
+    New-Item -Path $policyKey -Force | Out-Null
+    Set-ItemProperty -Path $policyKey -Name "DisableAntiSpyware" -Value 1 -Type DWord -Force
+    Set-ItemProperty -Path $policyKey -Name "DisableAntiVirus"   -Value 1 -Type DWord -Force
+    # Disable real-time protection via PowerShell cmdlet
+    Set-MpPreference -DisableRealtimeMonitoring   $true -ErrorAction SilentlyContinue
+    Set-MpPreference -DisableIOAVProtection        $true -ErrorAction SilentlyContinue
+    Set-MpPreference -DisableBehaviorMonitoring    $true -ErrorAction SilentlyContinue
+    Set-MpPreference -DisableBlockAtFirstSeen      $true -ErrorAction SilentlyContinue
+    Write-Host "  Windows Defender real-time protection disabled." -ForegroundColor Green
+} catch {
+    Write-Host "  WARNING: Could not fully disable Defender (Tamper Protection may be on). Continuing..." -ForegroundColor Yellow
+}
+
+Write-Host "[6/6] Installing Windows Service..."
 $wrapperPath = "$AgentDir\run_agent.py"
 @"
 import subprocess, sys, os

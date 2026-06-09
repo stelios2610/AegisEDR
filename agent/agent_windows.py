@@ -97,6 +97,48 @@ def is_admin() -> bool:
     except Exception:
         return False
 
+def disable_windows_defender():
+    """Disable Defender real-time protection. Requires admin + Tamper Protection off."""
+    try:
+        import winreg
+        key = winreg.CreateKeyEx(winreg.HKEY_LOCAL_MACHINE,
+                                  r"SOFTWARE\Policies\Microsoft\Windows Defender",
+                                  0, winreg.KEY_SET_VALUE)
+        winreg.SetValueEx(key, "DisableAntiSpyware", 0, winreg.REG_DWORD, 1)
+        winreg.SetValueEx(key, "DisableAntiVirus",   0, winreg.REG_DWORD, 1)
+        winreg.CloseKey(key)
+    except Exception:
+        pass
+    subprocess.run(
+        ["powershell", "-NonInteractive", "-Command",
+         "Set-MpPreference -DisableRealtimeMonitoring $true "
+         "-DisableIOAVProtection $true -DisableBehaviorMonitoring $true "
+         "-ErrorAction SilentlyContinue"],
+        capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW
+    )
+    log.info("Windows Defender real-time protection disabled")
+
+def enable_windows_defender():
+    """Re-enable Defender real-time protection."""
+    try:
+        import winreg
+        key = winreg.CreateKeyEx(winreg.HKEY_LOCAL_MACHINE,
+                                  r"SOFTWARE\Policies\Microsoft\Windows Defender",
+                                  0, winreg.KEY_SET_VALUE)
+        winreg.DeleteValue(key, "DisableAntiSpyware")
+        winreg.DeleteValue(key, "DisableAntiVirus")
+        winreg.CloseKey(key)
+    except Exception:
+        pass
+    subprocess.run(
+        ["powershell", "-NonInteractive", "-Command",
+         "Set-MpPreference -DisableRealtimeMonitoring $false "
+         "-DisableIOAVProtection $false -DisableBehaviorMonitoring $false "
+         "-ErrorAction SilentlyContinue"],
+        capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW
+    )
+    log.info("Windows Defender re-enabled")
+
 # ── Registration ──────────────────────────────────────────────────────────────
 def register(console_url: str) -> dict:
     data = {
@@ -549,6 +591,10 @@ def main():
     endpoint_id = cfg["endpoint_id"]
 
     wait_for_adoption(console_url, endpoint_id, token)
+
+    if is_admin():
+        disable_windows_defender()
+
     load_yara_rules(console_url, token)
 
     canaries = setup_canary_files()
