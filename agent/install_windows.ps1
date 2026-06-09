@@ -31,13 +31,15 @@ New-Item -ItemType Directory -Force -Path $AgentDir | Out-Null
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
 New-Item -ItemType Directory -Force -Path "$DataDir\Quarantine" | Out-Null
 
-Write-Host "[2/6] Downloading agent..."
+Write-Host "[2/6] Downloading agent files..."
 $agentUrl = "$ConsoleUrl/agent/agent_windows.py"
 & curl.exe -k -s -o "$AgentDir\agent.py" $agentUrl
 if (-not (Test-Path "$AgentDir\agent.py") -or (Get-Item "$AgentDir\agent.py").Length -lt 100) {
     Write-Host "ERROR: Failed to download agent. Check console URL and connectivity." -ForegroundColor Red
     exit 1
 }
+& curl.exe -k -s -o "$AgentDir\app_windows.py"   "$ConsoleUrl/agent/app_windows.py"
+& curl.exe -k -s -o "$AgentDir\tray_windows.py"  "$ConsoleUrl/agent/tray_windows.py"
 
 Write-Host "[3/6] Checking Python..."
 $python = Get-Command python -ErrorAction SilentlyContinue
@@ -51,9 +53,9 @@ if (-not $python) {
 }
 
 Write-Host "[4/6] Installing Python packages..."
-python -m pip install -q requests watchdog psutil yara-python 2>$null
+python -m pip install -q requests watchdog psutil customtkinter pillow yara-python 2>$null
 if ($LASTEXITCODE -ne 0) {
-    python -m pip install -q requests watchdog psutil
+    python -m pip install -q requests watchdog psutil customtkinter pillow
 }
 
 Write-Host "[5/6] Disabling Windows Defender..."
@@ -74,29 +76,52 @@ try {
     Write-Host "  WARNING: Could not fully disable Defender (Tamper Protection may be on). Continuing..." -ForegroundColor Yellow
 }
 
-Write-Host "[6/6] Installing Windows Service..."
+Write-Host "[6/6] Installing Windows Service and Tray..."
 $wrapperPath = "$AgentDir\run_agent.py"
 "import subprocess, sys, os" | Out-File -FilePath $wrapperPath -Encoding utf8
 "os.chdir(r'$AgentDir')" | Add-Content -Path $wrapperPath -Encoding utf8
 "subprocess.run([sys.executable, r'$AgentDir\agent.py', '$ConsoleUrl'])" | Add-Content -Path $wrapperPath -Encoding utf8
 
-# Use NSSM or sc.exe to install as service
+# Detect Python executable path (avoid Windows Store stub)
+$pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
+if ($pythonExe -like "*WindowsApps*") {
+    # Find real python
+    $pythonExe = Get-ChildItem "C:\Users\$env:USERNAME\AppData\Local\Programs\Python" -Recurse -Filter "python.exe" -ErrorAction SilentlyContinue |
+                 Select-Object -First 1 -ExpandProperty FullName
+    if (-not $pythonExe) {
+        $pythonExe = Get-ChildItem "C:\Python*" -Filter "python.exe" -ErrorAction SilentlyContinue |
+                     Select-Object -First 1 -ExpandProperty FullName
+    }
+}
+if (-not $pythonExe) { $pythonExe = "python" }
+Write-Host "  Using Python: $pythonExe" -ForegroundColor Gray
+
+# Background agent task (runs as SYSTEM)
 $nssm = Get-Command nssm -ErrorAction SilentlyContinue
 if ($nssm) {
-    nssm install $ServiceName python "$AgentDir\agent.py" "$ConsoleUrl"
+    nssm install $ServiceName $pythonExe "$AgentDir\agent.py $ConsoleUrl"
     nssm set $ServiceName AppDirectory $AgentDir
     nssm set $ServiceName Description "AegisEDR Security Agent"
     nssm start $ServiceName
 } else {
-    # Use Task Scheduler as fallback
-    $action = New-ScheduledTaskAction -Execute "python" -Argument "`"$AgentDir\agent.py`" $ConsoleUrl" -WorkingDirectory $AgentDir
-    $trigger = New-ScheduledTaskTrigger -AtStartup
-    $settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
+    $action    = New-ScheduledTaskAction -Execute $pythonExe -Argument "`"$AgentDir\agent.py`" $ConsoleUrl" -WorkingDirectory $AgentDir
+    $trigger   = New-ScheduledTaskTrigger -AtStartup
+    $settings  = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
     $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
     Register-ScheduledTask -TaskName $ServiceName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
     Start-ScheduledTask -TaskName $ServiceName
-    Write-Host "  Agent registered as Scheduled Task (no NSSM found)" -ForegroundColor Yellow
+    Write-Host "  Agent registered as Scheduled Task (SYSTEM)" -ForegroundColor Yellow
 }
+
+# Tray icon task - runs when user logs in (not SYSTEM, so tray is visible)
+$trayTask = "AegisEDRTray"
+$trayAction = New-ScheduledTaskAction -Execute $pythonExe -Argument "`"$AgentDir\tray_windows.py`"" -WorkingDirectory $AgentDir
+$trayTrigger = New-ScheduledTaskTrigger -AtLogOn
+$traySettings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero)
+$trayPrincipal = New-ScheduledTaskPrincipal -GroupId "Users" -RunLevel Limited
+Register-ScheduledTask -TaskName $trayTask -Action $trayAction -Trigger $trayTrigger -Settings $traySettings -Principal $trayPrincipal -Force | Out-Null
+Start-ScheduledTask -TaskName $trayTask
+Write-Host "  Tray registered for current and future logons." -ForegroundColor Green
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green

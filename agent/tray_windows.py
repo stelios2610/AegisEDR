@@ -127,6 +127,26 @@ def get_icon_image() -> Image.Image:
     return make_icon(color, _threat_count if _current_status == "threat" else 0, disabled)
 
 # ── Menu actions ──────────────────────────────────────────────────────────────
+def open_app(icon=None, it=None):
+    """Open the native AegisEDR dashboard window."""
+    def _launch():
+        app_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app_windows.py")
+        if os.path.isfile(app_path):
+            subprocess.Popen(
+                [sys.executable, app_path],
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                cwd=os.path.dirname(app_path)
+            )
+        else:
+            # Compiled exe next to tray exe
+            app_exe = os.path.join(os.path.dirname(sys.executable), "AegisEDR.exe")
+            if not os.path.isfile(app_exe):
+                app_exe = r"C:\Program Files\AegisEDR\AegisEDR.exe"
+            if os.path.isfile(app_exe):
+                subprocess.Popen([app_exe],
+                                 creationflags=subprocess.CREATE_NO_WINDOW)
+    threading.Thread(target=_launch, daemon=True).start()
+
 def open_console(icon, it):
     if _console_url:
         webbrowser.open(_console_url)
@@ -284,7 +304,8 @@ def build_menu() -> pystray.Menu:
     base_items = [
         item("AegisEDR Agent v1.0.0", lambda i, it: None, enabled=False),
         pystray.Menu.SEPARATOR,
-        item("Open Console", open_console),
+        item("Open Dashboard", open_app, default=True),
+        item("Open Web Console", open_console),
         item("View Logs",    view_logs),
         pystray.Menu.SEPARATOR,
     ]

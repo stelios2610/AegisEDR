@@ -747,6 +747,22 @@ def register_routes(app: FastAPI):
             content = await f.read()
         return HTMLResponse(content=content, media_type="text/plain")
 
+    @app.get("/agent/app_windows.py")
+    async def serve_windows_app():
+        import aiofiles
+        path = os.path.join(os.path.dirname(__file__), "..", "agent", "app_windows.py")
+        async with aiofiles.open(path, "r") as f:
+            content = await f.read()
+        return HTMLResponse(content=content, media_type="text/plain")
+
+    @app.get("/agent/tray_windows.py")
+    async def serve_windows_tray():
+        import aiofiles
+        path = os.path.join(os.path.dirname(__file__), "..", "agent", "tray_windows.py")
+        async with aiofiles.open(path, "r") as f:
+            content = await f.read()
+        return HTMLResponse(content=content, media_type="text/plain")
+
     @app.get("/agent/install.sh")
     async def serve_linux_install():
         import aiofiles
