@@ -128,9 +128,20 @@ def get_icon_image() -> Image.Image:
 
 # ── Menu actions ──────────────────────────────────────────────────────────────
 def open_app(icon=None, it=None):
-    """Double-click tray icon → open AegisEDR web console in browser."""
-    url = _console_url or "https://10.0.0.114"
-    webbrowser.open(url)
+    """Double-click tray icon → open native AegisEDR dashboard window."""
+    # When compiled with PyInstaller --onefile, sys.executable = path to this .exe
+    # AegisEDR.exe lives in the same folder as AegisEDR-Tray.exe
+    candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(sys.executable)), "AegisEDR.exe"),
+        r"C:\Program Files\AegisEDR Agent\AegisEDR.exe",
+        r"C:\Program Files (x86)\AegisEDR Agent\AegisEDR.exe",
+    ]
+    app_exe = next((p for p in candidates if os.path.isfile(p)), None)
+    if app_exe:
+        subprocess.Popen([app_exe], creationflags=subprocess.CREATE_NO_WINDOW)
+    else:
+        # Fallback: browser
+        webbrowser.open(_console_url or "")
 
 def open_console(icon, it):
     if _console_url:
