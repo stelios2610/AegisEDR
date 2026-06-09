@@ -32,8 +32,16 @@ New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
 New-Item -ItemType Directory -Force -Path "$DataDir\Quarantine" | Out-Null
 
 Write-Host "[2/6] Downloading agent..."
+# Skip SSL certificate check for self-signed certs
+if ($PSVersionTable.PSVersion.Major -ge 6) {
+    $iwrParams = @{ SkipCertificateCheck = $true; UseBasicParsing = $true }
+} else {
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
+    $iwrParams = @{ UseBasicParsing = $true }
+}
 $agentUrl = "$ConsoleUrl/agent/agent_windows.py"
-Invoke-WebRequest -Uri $agentUrl -OutFile "$AgentDir\agent.py" -UseBasicParsing
+Invoke-WebRequest -Uri $agentUrl -OutFile "$AgentDir\agent.py" @iwrParams
 
 Write-Host "[3/6] Checking Python..."
 $python = Get-Command python -ErrorAction SilentlyContinue
