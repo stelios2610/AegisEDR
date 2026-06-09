@@ -423,11 +423,13 @@ try:
                 return
             time.sleep(0.4)  # let file finish writing
             threats = scan_file(path)
+            quarantined = False
             for t in threats:
                 tid = save_threat(t)
-                if t.get("severity") in ("critical", "high") and tid > 0:
+                if not quarantined and t.get("severity") in ("critical", "high") and tid > 0:
                     try:
                         quarantine_file(path, tid)
+                        quarantined = True  # file moved — skip subsequent matches
                     except Exception:
                         pass
 
