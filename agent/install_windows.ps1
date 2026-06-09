@@ -80,11 +80,9 @@ try {
 
 Write-Host "[6/6] Installing Windows Service..."
 $wrapperPath = "$AgentDir\run_agent.py"
-@"
-import subprocess, sys, os
-os.chdir(r'$AgentDir')
-subprocess.run([sys.executable, r'$AgentDir\agent.py', '$ConsoleUrl'])
-"@ | Out-File -FilePath $wrapperPath -Encoding utf8
+"import subprocess, sys, os" | Out-File -FilePath $wrapperPath -Encoding utf8
+"os.chdir(r'$AgentDir')" | Add-Content -Path $wrapperPath -Encoding utf8
+"subprocess.run([sys.executable, r'$AgentDir\agent.py', '$ConsoleUrl'])" | Add-Content -Path $wrapperPath -Encoding utf8
 
 # Use NSSM or sc.exe to install as service
 $nssm = Get-Command nssm -ErrorAction SilentlyContinue
