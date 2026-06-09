@@ -46,7 +46,7 @@ Invoke-WebRequest -Uri $agentUrl -OutFile "$AgentDir\agent.py" @iwrParams
 Write-Host "[3/6] Checking Python..."
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
-    Write-Host "  Python not found — downloading installer..." -ForegroundColor Yellow
+    Write-Host "  Python not found - downloading installer..." -ForegroundColor Yellow
     $pythonUrl = "https://www.python.org/ftp/python/3.12.0/python-3.12.0-amd64.exe"
     $pythonInstaller = "$env:TEMP\python_installer.exe"
     Invoke-WebRequest -Uri $pythonUrl -OutFile $pythonInstaller -UseBasicParsing

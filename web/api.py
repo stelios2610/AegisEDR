@@ -761,9 +761,10 @@ def register_routes(app: FastAPI):
         path = os.path.join(os.path.dirname(__file__), "..", "agent", "install_windows.ps1")
         async with aiofiles.open(path, "r") as f:
             content = await f.read()
-        # PowerShell 5.x requires CRLF line endings
+        # PowerShell 5.x requires CRLF line endings + UTF-8 BOM for correct encoding
         content = content.replace("\r\n", "\n").replace("\n", "\r\n")
-        return HTMLResponse(content=content, media_type="text/plain")
+        bom = b"\xef\xbb\xbf"
+        return Response(content=bom + content.encode("utf-8"), media_type="text/plain; charset=utf-8")
 
     @app.get("/agent/AegisEDR-Agent-1.0.0-x64.msi")
     async def serve_windows_msi():
