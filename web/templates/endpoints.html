@@ -78,7 +78,10 @@
           </td>
           <td class="text-muted">{{ ep.last_seen[:16] if ep.last_seen else 'Never' }}</td>
           <td>
-            <button class="btn btn-danger btn-sm" onclick="deleteEndpoint({{ ep.id }}, this)">✕</button>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-primary btn-sm" onclick="quickScan({{ ep.id }}, this)" title="Quick Scan">⚡ Scan</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteEndpoint({{ ep.id }}, this)" title="Remove">✕</button>
+            </div>
           </td>
         </tr>
         {% else %}
@@ -147,6 +150,21 @@ function filterTable() {
   document.querySelectorAll('#endpTable tbody tr[data-name]').forEach(r => {
     r.style.display = !s || r.dataset.name.includes(s) ? '' : 'none';
   });
+}
+
+async function quickScan(id, btn) {
+  btn.disabled = true;
+  btn.textContent = '...';
+  const r = await api('POST', '/api/scan/start', { endpoint_id: id, scan_type: 'quick' });
+  if (r.job_id || r.status === 'queued') {
+    btn.textContent = 'Queued';
+    btn.style.background = 'rgba(34,197,94,.2)';
+    showAlert('Quick scan queued — agent will start shortly');
+  } else {
+    btn.disabled = false;
+    btn.textContent = 'Scan';
+    showAlert(r.detail || 'Could not queue scan', 'error');
+  }
 }
 
 async function adoptEndpoint(id) {

