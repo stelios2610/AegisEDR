@@ -22,6 +22,24 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+# ── Windows toast notification ─────────────────────────────────────────────────
+def _toast(title: str, message: str, severity: str = "warning"):
+    """Show a Windows balloon/toast notification via PowerShell."""
+    icon = {"critical": "Error", "high": "Warning"}.get(severity, "Warning")
+    ps = (
+        f"Add-Type -AssemblyName System.Windows.Forms; "
+        f"$n=New-Object System.Windows.Forms.NotifyIcon; "
+        f"$n.Icon=[System.Drawing.SystemIcons]::{icon}; "
+        f"$n.Visible=$true; "
+        f"$n.ShowBalloonTip(8000,'{title}','{message}',"
+        f"[System.Windows.Forms.ToolTipIcon]::{icon}); "
+        f"Start-Sleep 9; $n.Dispose()"
+    )
+    subprocess.Popen(
+        ["powershell", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", ps],
+        creationflags=subprocess.CREATE_NO_WINDOW
+    )
+
 AGENT_VERSION  = "2.0.0"
 DATA_DIR       = r"C:\ProgramData\AegisEDR"
 DB_PATH        = os.path.join(DATA_DIR, "aegisedr.db")
@@ -423,7 +441,23 @@ try:
                 return
             time.sleep(0.4)  # let file finish writing
             threats = scan_file(path)
+            if not threats:
+                return
             quarantined = False
+            fname = os.path.basename(path)
+            # Show one notification for the highest-severity threat found
+            sev = threats[0].get("severity", "medium")
+            name = threats[0].get("name", "Unknown")
+            if sev in ("critical", "high"):
+                threading.Thread(
+                    target=_toast,
+                    args=(
+                        f"AegisEDR — Threat Detected!",
+                        f"{fname}: {name}",
+                        sev
+                    ),
+                    daemon=True
+                ).start()
             for t in threats:
                 tid = save_threat(t)
                 if not quarantined and t.get("severity") in ("critical", "high") and tid > 0:
