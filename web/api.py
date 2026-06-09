@@ -109,6 +109,28 @@ def register_routes(app: FastAPI):
 
     # ─── Endpoints ───────────────────────────────────────────────────────────
 
+    @app.get("/deploy", response_class=HTMLResponse)
+    async def deploy_page(request: Request, user=Depends(require_auth)):
+        if isinstance(user, RedirectResponse):
+            return user
+        console_url = str(request.base_url).rstrip("/")
+        msi_candidates = [
+            os.path.join(os.path.dirname(__file__), "..", "downloads", "AegisEDR-Agent-1.0.0-x64.msi"),
+            os.path.join(os.path.dirname(__file__), "..", "dist", "AegisEDR-Agent-1.0.0-x64.msi"),
+        ]
+        msi_path = next((p for p in msi_candidates if os.path.isfile(p)), None)
+        msi_available = msi_path is not None
+        msi_size = ""
+        if msi_path:
+            sz = os.path.getsize(msi_path)
+            msi_size = f"{sz/1024/1024:.1f} MB"
+        return templates.TemplateResponse("deploy.html", {
+            "request": request, "user": user,
+            "console_url": console_url,
+            "msi_available": msi_available,
+            "msi_size": msi_size,
+        })
+
     @app.get("/endpoints", response_class=HTMLResponse)
     async def endpoints_page(request: Request, user=Depends(require_auth)):
         if isinstance(user, RedirectResponse):
@@ -785,9 +807,14 @@ def register_routes(app: FastAPI):
     @app.get("/agent/AegisEDR-Agent-1.0.0-x64.msi")
     async def serve_windows_msi():
         from fastapi.responses import FileResponse
-        path = os.path.join(os.path.dirname(__file__), "..", "downloads", "AegisEDR-Agent-1.0.0-x64.msi")
-        if not os.path.isfile(path):
-            raise HTTPException(status_code=404, detail="MSI not found on server")
+        root = os.path.dirname(__file__)
+        candidates = [
+            os.path.join(root, "..", "downloads", "AegisEDR-Agent-1.0.0-x64.msi"),
+            os.path.join(root, "..", "dist",      "AegisEDR-Agent-1.0.0-x64.msi"),
+        ]
+        path = next((p for p in candidates if os.path.isfile(p)), None)
+        if not path:
+            raise HTTPException(status_code=404, detail="MSI not yet built. Run agent/build_msi.ps1 on the server.")
         return FileResponse(path, media_type="application/octet-stream",
                             filename="AegisEDR-Agent-1.0.0-x64.msi")
 

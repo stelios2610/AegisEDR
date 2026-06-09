@@ -72,6 +72,30 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "  ✓ AegisEDR-Tray.exe" -ForegroundColor Green
 }
 
+# ── Step 3b: Build App (GUI Console) EXE ────────────────────────────────────
+Write-Host ""
+Write-Host "[3b] Building AegisEDR.exe (dashboard UI)..." -ForegroundColor Yellow
+$appArgs = @(
+    "--onefile", "--noconsole",
+    "--name=AegisEDR",
+    "--distpath=$DistDir",
+    "--workpath=$DistDir\_tmp",
+    "--specpath=$DistDir",
+    "--noconfirm",
+    "--hidden-import=customtkinter",
+    "--hidden-import=PIL._tkinter_finder",
+    "--collect-all=customtkinter"
+)
+if ($icon) { $appArgs += $icon }
+$appArgs += "$AgentDir\app_windows.py"
+
+pyinstaller @appArgs
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  ⚠ App build failed (pip install customtkinter pillow)" -ForegroundColor Yellow
+} else {
+    Write-Host "  ✓ AegisEDR.exe" -ForegroundColor Green
+}
+
 # ── Step 4: Install WiX v4 if needed ─────────────────────────────────────────
 Write-Host ""
 Write-Host "[4/5] Checking WiX Toolset..." -ForegroundColor Yellow

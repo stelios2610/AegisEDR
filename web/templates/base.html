@@ -183,6 +183,9 @@
       <span class="nav-badge">{{ pending_count }}</span>
       {% endif %}
     </a>
+    <a href="/deploy" class="nav-item {% if '/deploy' in request.url.path %}active{% endif %}">
+      <span class="nav-icon">📦</span><span>Deploy Agent</span>
+    </a>
     <a href="/settings" class="nav-item {% if '/settings' in request.url.path %}active{% endif %}">
       <span class="nav-icon">⚙️</span><span>Settings</span>
     </a>

@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Deploy Agent — AegisEDR{% endblock %}
+{% block page_title %}Deploy Agent{% endblock %}
+
+{% block content %}
+<style>
+  .deploy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+  .platform-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .platform-card.featured { border-color: var(--accent); }
+  .platform-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; }
+  .platform-icon { font-size: 36px; }
+  .platform-name { font-size: 17px; font-weight: 700; }
+  .platform-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .platform-body { padding: 24px; }
+  .method-label { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; display: block; }
+  .code-block { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 12px; color: #e2e8f0; position: relative; margin-bottom: 16px; word-break: break-all; line-height: 1.6; }
+  .copy-btn { position: absolute; top: 8px; right: 8px; background: var(--bg3); border: 1px solid var(--border); color: var(--text2); padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; }
+  .copy-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+  .download-btn { display: flex; align-items: center; gap: 10px; padding: 14px 20px; background: var(--accent); color: white; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 14px; transition: all 0.15s; }
+  .download-btn:hover { background: var(--accent2); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(99,102,241,.4); }
+  .download-btn .dl-icon { font-size: 22px; }
+  .download-btn .dl-text { display: flex; flex-direction: column; }
+  .download-btn .dl-sub { font-size: 11px; font-weight: 400; opacity: 0.8; margin-top: 1px; }
+  .msi-status { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 16px; padding: 10px 14px; border-radius: 8px; }
+  .msi-status.ok { background: rgba(34,197,94,.1); color: var(--green); border: 1px solid rgba(34,197,94,.25); }
+  .msi-status.missing { background: rgba(249,115,22,.1); color: var(--orange); border: 1px solid rgba(249,115,22,.25); }
+  .step-list { list-style: none; counter-reset: steps; }
+  .step-list li { counter-increment: steps; display: flex; gap: 12px; margin-bottom: 14px; font-size: 13px; }
+  .step-list li::before { content: counter(steps); min-width: 24px; height: 24px; background: var(--accent); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+  .step-list li span { color: var(--text); line-height: 1.5; }
+</style>
+
+<div style="margin-bottom: 24px;">
+  <h2 style="font-size:22px;font-weight:700;margin-bottom:6px;">Deploy AegisEDR Agent</h2>
+  <p style="color:var(--text2);font-size:14px;">Install the AegisEDR agent on your endpoints. The agent connects back to this console at <code>{{ console_url }}</code></p>
+</div>
+
+<div class="deploy-grid">
+
+  <!-- Windows MSI -->
+  <div class="platform-card featured">
+    <div class="platform-header">
+      <div class="platform-icon">🪟</div>
+      <div>
+        <div class="platform-name">Windows</div>
+        <div class="platform-sub">Windows 10 / 11 — x64</div>
+      </div>
+    </div>
+    <div class="platform-body">
+
+      <!-- MSI download -->
+      <span class="method-label">Method 1 — MSI Installer (Recommended)</span>
+      {% if msi_available %}
+      <div class="msi-status ok">✓ MSI is ready to download ({{ msi_size }})</div>
+      <a href="/agent/AegisEDR-Agent-1.0.0-x64.msi" class="download-btn" style="margin-bottom:16px;">
+        <span class="dl-icon">📦</span>
+        <span class="dl-text">
+          Download AegisEDR-Agent-1.0.0-x64.msi
+          <span class="dl-sub">Double-click to install — no command line needed</span>
+        </span>
+      </a>
+      {% else %}
+      <div class="msi-status missing">⚠ MSI not yet built on server. Use PowerShell method below, or run build_msi.ps1 on the server.</div>
+      {% endif %}
+
+      <hr class="divider">
+
+      <!-- PowerShell one-liner -->
+      <span class="method-label">Method 2 — PowerShell One-liner</span>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:8px;">Run as Administrator in PowerShell:</p>
+      <div class="code-block" id="ps1cmd">iex (curl.exe -k -s "{{ console_url }}/agent/install.ps1" | Out-String)<button class="copy-btn" onclick="copyCode('ps1cmd')">Copy</button></div>
+
+      <hr class="divider">
+
+      <!-- Steps -->
+      <span class="method-label">What the installer does</span>
+      <ul class="step-list">
+        <li><span>Creates <code>C:\Program Files\AegisEDR</code> and downloads agent files</span></li>
+        <li><span>Installs Python packages (requests, watchdog, customtkinter)</span></li>
+        <li><span>Disables Windows Defender real-time protection</span></li>
+        <li><span>Registers background agent as SYSTEM Scheduled Task</span></li>
+        <li><span>Registers tray icon to auto-start at login</span></li>
+        <li><span>Endpoint appears in console for admin approval</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Linux -->
+  <div class="platform-card">
+    <div class="platform-header">
+      <div class="platform-icon">🐧</div>
+      <div>
+        <div class="platform-name">Linux</div>
+        <div class="platform-sub">Ubuntu 20.04+ / Debian 11+ / CentOS 8+</div>
+      </div>
+    </div>
+    <div class="platform-body">
+      <span class="method-label">One-liner installer</span>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:8px;">Run as root:</p>
+      <div class="code-block" id="bashcmd">curl -k -s "{{ console_url }}/agent/install.sh" | sudo bash -s "{{ console_url }}"<button class="copy-btn" onclick="copyCode('bashcmd')">Copy</button></div>
+
+      <hr class="divider">
+
+      <span class="method-label">Manual install</span>
+      <div class="code-block" id="mancmd">pip3 install requests watchdog psutil yara-python
+curl -k -s -o /opt/aegisedr/agent.py {{ console_url }}/agent/agent_linux.py
+python3 /opt/aegisedr/agent.py {{ console_url }}<button class="copy-btn" onclick="copyCode('mancmd')">Copy</button></div>
+
+      <hr class="divider">
+
+      <span class="method-label">What the installer does</span>
+      <ul class="step-list">
+        <li><span>Creates <code>/opt/aegisedr/</code> directory</span></li>
+        <li><span>Downloads and installs the agent</span></li>
+        <li><span>Creates a systemd service for auto-start</span></li>
+        <li><span>Endpoint appears in console for admin approval</span></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- After install -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">After Installation</span>
+  </div>
+  <div class="card-body">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;">
+      <div style="display:flex;gap:14px;align-items:flex-start;">
+        <div style="font-size:28px;flex-shrink:0;">1️⃣</div>
+        <div>
+          <div style="font-weight:600;margin-bottom:4px;">Endpoint registers</div>
+          <div style="font-size:12px;color:var(--text2);">The agent connects to this console and appears in the <a href="/endpoints" style="color:var(--accent);">Endpoints</a> list with status "Pending".</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:14px;align-items:flex-start;">
+        <div style="font-size:28px;flex-shrink:0;">2️⃣</div>
+        <div>
+          <div style="font-weight:600;margin-bottom:4px;">Admin approves</div>
+          <div style="font-size:12px;color:var(--text2);">Go to <a href="/endpoints" style="color:var(--accent);">Endpoints → Approve</a> to allow the agent to start sending telemetry.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:14px;align-items:flex-start;">
+        <div style="font-size:28px;flex-shrink:0;">3️⃣</div>
+        <div>
+          <div style="font-weight:600;margin-bottom:4px;">Protected</div>
+          <div style="font-size:12px;color:var(--text2);">The tray icon turns green. The native AegisEDR dashboard opens with double-click.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function copyCode(id) {
+  const el = document.getElementById(id);
+  const btn = el.querySelector('.copy-btn');
+  // Get text content without the button text
+  const text = el.childNodes[0].textContent.trim();
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copied!';
+    btn.style.background = 'var(--green)';
+    btn.style.color = 'white';
+    setTimeout(() => { btn.textContent = 'Copy'; btn.style.background = ''; btn.style.color = ''; }, 2000);
+  });
+}
+</script>
+{% endblock %}

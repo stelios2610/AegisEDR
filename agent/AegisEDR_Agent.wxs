@@ -58,9 +58,22 @@
         <File Id="TrayExeFile" Name="AegisEDR-Tray.exe"
               Source="..\dist\AegisEDR-Tray.exe" KeyPath="yes"/>
       </Component>
+      <Component Id="AppExeComp">
+        <File Id="AppExeFile" Name="AegisEDR.exe"
+              Source="..\dist\AegisEDR.exe" KeyPath="yes"/>
+      </Component>
       <Component Id="IconComp">
         <File Id="IconFile" Name="icon.ico"
               Source="..\assets\icon.ico" KeyPath="yes"/>
+      </Component>
+      <!-- Auto-start tray icon at Windows login for all users -->
+      <Component Id="TrayAutoStartComp" Directory="INSTALLDIR">
+        <RegistryValue Root="HKLM"
+                       Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+                       Name="AegisEDRTray"
+                       Type="string"
+                       Value="[INSTALLDIR]AegisEDR-Tray.exe"
+                       KeyPath="yes"/>
       </Component>
     </ComponentGroup>
 
@@ -91,9 +104,10 @@
     <!-- Start menu shortcuts -->
     <ComponentGroup Id="Shortcuts" Directory="APPMENUFOLDER">
       <Component Id="MenuShortcuts">
-        <Shortcut Id="AgentShortcut"   Name="AegisEDR Agent"
-                  Target="[INSTALLDIR]AegisEDR-Agent.exe"
-                  Icon="AegisIcon" WorkingDirectory="INSTALLDIR"/>
+        <Shortcut Id="DashboardShortcut" Name="AegisEDR Security"
+                  Target="[INSTALLDIR]AegisEDR.exe"
+                  Icon="AegisIcon" WorkingDirectory="INSTALLDIR"
+                  Description="Open AegisEDR Security Dashboard"/>
         <Shortcut Id="TrayShortcut"    Name="AegisEDR Tray Monitor"
                   Target="[INSTALLDIR]AegisEDR-Tray.exe"
                   Icon="AegisIcon" WorkingDirectory="INSTALLDIR"/>
@@ -139,6 +153,7 @@
       <ComponentGroupRef Id="AppFiles"/>
       <ComponentGroupRef Id="DataDirs"/>
       <ComponentGroupRef Id="Shortcuts"/>
+      <ComponentRef Id="TrayAutoStartComp"/>
     </Feature>
 
   </Package>
