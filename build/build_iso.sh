@@ -79,8 +79,7 @@ autoinstall:
   identity:
     hostname: aegisedr
     username: aegisedr
-    password: "$6$rounds=4096$aegisedr$qZ5VzCGPDhNzJFyXWr2BqVQmyHCmQb4N/7B6xzUjlWr3kFpDnRH7MtKhP0LuI8vEm5JkrQXtGcN2dHsL3Y0"
-    # Password: AegisEDR2024! (hashed) — force change on first login
+    password: "PASSWORD_HASH_PLACEHOLDER"
 
   storage:
     layout:
@@ -117,6 +116,13 @@ autoinstall:
   late-commands:
     - curtin in-target --target=/target -- bash /cdrom/scripts/post_install.sh
 USERDATA
+
+_aegis_init_pass=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 20)
+_aegis_hash=$(openssl passwd -6 "$_aegis_init_pass")
+AEGIS_OS_HASH="$_aegis_hash" python3 -c 'import os, pathlib; p = pathlib.Path("iso_custom/nocloud/user-data"); p.write_text(p.read_text().replace("PASSWORD_HASH_PLACEHOLDER", os.environ["AEGIS_OS_HASH"]))'
+umask 077
+printf '%s\n' "$_aegis_init_pass" > "$WORK_DIR/OS_INITIAL_PASSWORD.txt"
+unset _aegis_init_pass _aegis_hash AEGIS_OS_HASH
 
 # Post-install script (runs inside the new system)
 cat > iso_custom/scripts/post_install.sh << 'POSTINSTALL'
@@ -161,6 +167,15 @@ server {
     ssl_certificate_key /etc/aegisedr/ssl/key.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
+    location /ws/ {
+        proxy_pass http://127.0.0.1:9000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
     location / {
         proxy_pass http://127.0.0.1:9000;
         proxy_set_header Host $host;
@@ -215,7 +230,7 @@ ufw default allow outgoing
 ufw allow 22/tcp comment "SSH"
 ufw allow 80/tcp comment "HTTP redirect"
 ufw allow 443/tcp comment "AegisEDR Console HTTPS"
-ufw allow 9000/tcp comment "AegisEDR Agent API"
+# The console binds 127.0.0.1:9000. Agents use HTTPS on 443.
 ufw --force enable
 
 # Enable services
@@ -278,6 +293,6 @@ echo "╔═══════════════════════�
 echo "║  ISO built successfully!                     ║"
 echo "║  Output: $WORK_DIR/$OUTPUT_ISO"
 echo "║                                              ║"
-echo "║  Default login: aegisedr / AegisEDR2024!    ║"
-echo "║  Console: https://<server-ip>               ║"
+echo "║  OS password: $WORK_DIR/OS_INITIAL_PASSWORD.txt"
+echo "║  Console admin is created by the first-boot wizard ║"
 echo "╚══════════════════════════════════════════════╝"

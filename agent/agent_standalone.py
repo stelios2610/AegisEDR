@@ -342,12 +342,14 @@ def scan_file(file_path: str) -> list[dict]:
                 "file_hash":   file_hash
             })
 
-    # Entropy (packed/encrypted executables — possible ransomware dropper)
+    # A single high-entropy executable is normal for packed and Go binaries.
+    # Flag it only when the image also lives in a temp directory.
     if ext in {".exe", ".dll", ".com", ".scr"} and not threats:
-        entropy = file_entropy(file_path)
-        if entropy > 7.5:
+        lowered = file_path.replace("/", "\\").lower()
+        in_temp = "\\temp\\" in lowered or "\\appdata\\local\\temp\\" in lowered
+        if in_temp and file_entropy(file_path) > 7.9:
             threats.append({
-                "name":        "Suspicious:HighEntropy",
+                "name":        "Suspicious:HighEntropyTemp",
                 "file_path":   file_path,
                 "severity":    "medium",
                 "threat_type": "heuristic",

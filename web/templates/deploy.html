@@ -33,7 +33,39 @@
 
 <div style="margin-bottom: 24px;">
   <h2 style="font-size:22px;font-weight:700;margin-bottom:6px;">Deploy AegisEDR Agent</h2>
-  <p style="color:var(--text2);font-size:14px;">Install the AegisEDR agent on your endpoints. The agent connects back to this console at <code>{{ console_url }}</code></p>
+  <p style="color:var(--text2);font-size:14px;">Install the agent against <code>{{ console_url }}</code>. Registration requires a one-time enrollment code. The agent verifies this console's TLS certificate.</p>
+</div>
+
+<div class="card" style="margin-bottom:24px;">
+  <div class="card-header"><span class="card-title">Enrollment</span></div>
+  <div class="card-body">
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Generate a code and paste it into the installer. The code is shown once. The console stores only its hash.</p>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+      <input id="enroll-label" placeholder="Label, e.g. finance laptops" style="max-width:240px;">
+      <input id="enroll-uses" type="number" min="1" max="500" value="1" style="max-width:90px;" title="How many agents can use this code">
+      <button class="btn btn-primary" onclick="createEnrollment()">Generate code</button>
+    </div>
+    <div id="enroll-result" class="text-muted" style="font-size:13px;margin-bottom:12px;">No code generated in this session.</div>
+    <div style="font-size:12px;color:var(--text2);">
+      Certificate SHA-256:
+      <code id="ca-fingerprint">{{ ca_fingerprint or "certificate file not found on this host" }}</code>
+    </div>
+    {% if enrollment_codes %}
+    <table style="margin-top:16px;">
+      <thead><tr><th>Label</th><th>Remaining</th><th>Expires</th><th></th></tr></thead>
+      <tbody>
+        {% for code in enrollment_codes %}
+        <tr>
+          <td>{{ code.label or "—" }}</td>
+          <td>{{ code.uses_remaining }}/{{ code.max_uses }}{% if code.revoked %} revoked{% endif %}</td>
+          <td class="text-muted">{{ code.expires_at or "—" }}</td>
+          <td>{% if not code.revoked %}<button class="btn btn-danger btn-sm" onclick="revokeCode({{ code.id }})">Revoke</button>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
 </div>
 
 <div class="deploy-grid">
@@ -69,7 +101,7 @@
       <!-- PowerShell one-liner -->
       <span class="method-label">Method 2 — PowerShell One-liner</span>
       <p style="font-size:12px;color:var(--text2);margin-bottom:8px;">Run as Administrator in PowerShell:</p>
-      <div class="code-block" id="ps1cmd">iex (curl.exe -k -s "{{ console_url }}/agent/install.ps1" | Out-String)<button class="copy-btn" onclick="copyCode('ps1cmd')">Copy</button></div>
+      <div class="code-block" id="ps1cmd">curl.exe -k -fsSL -o $env:TEMP\aegis-install.ps1 "{{ console_url }}/agent/install.ps1"; powershell -ExecutionPolicy Bypass -File $env:TEMP\aegis-install.ps1 -ConsoleUrl "{{ console_url }}" -EnrollmentCode "ENROLLMENT_CODE" -CertSha256 "{{ ca_fingerprint or "CERT_SHA256" }}"<button class="copy-btn" onclick="copyCode('ps1cmd')">Copy</button></div>
 
       <hr class="divider">
 
@@ -98,14 +130,14 @@
     <div class="platform-body">
       <span class="method-label">One-liner installer</span>
       <p style="font-size:12px;color:var(--text2);margin-bottom:8px;">Run as root:</p>
-      <div class="code-block" id="bashcmd">curl -k -s "{{ console_url }}/agent/install.sh" | sudo bash -s "{{ console_url }}"<button class="copy-btn" onclick="copyCode('bashcmd')">Copy</button></div>
+      <div class="code-block" id="bashcmd">curl -kfsSL -o /tmp/aegis-ca.pem "{{ console_url }}/api/ca" &amp;&amp; echo "{{ ca_fingerprint or "CERT_SHA256" }}  /tmp/aegis-ca.pem" | sha256sum -c &amp;&amp; curl -fsSL --cacert /tmp/aegis-ca.pem "{{ console_url }}/agent/install.sh" | sudo bash -s -- "{{ console_url }}" "ENROLLMENT_CODE" "{{ ca_fingerprint or "CERT_SHA256" }}"<button class="copy-btn" onclick="copyCode('bashcmd')">Copy</button></div>
 
       <hr class="divider">
 
       <span class="method-label">Manual install</span>
-      <div class="code-block" id="mancmd">pip3 install requests watchdog psutil yara-python
-curl -k -s -o /opt/aegisedr/agent.py {{ console_url }}/agent/agent_linux.py
-python3 /opt/aegisedr/agent.py {{ console_url }}<button class="copy-btn" onclick="copyCode('mancmd')">Copy</button></div>
+      <div class="code-block" id="mancmd">curl -fsSL --cacert /tmp/aegis-ca.pem -o /opt/aegisedr-agent/agent.py "{{ console_url }}/agent/agent_linux.py"
+curl -fsSL --cacert /tmp/aegis-ca.pem -o /opt/aegisedr-agent/edr_common.py "{{ console_url }}/agent/edr_common.py"
+python3 /opt/aegisedr-agent/agent.py "{{ console_url }}" --enroll "ENROLLMENT_CODE" --ca /tmp/aegis-ca.pem<button class="copy-btn" onclick="copyCode('mancmd')">Copy</button></div>
 
       <hr class="divider">
 
@@ -153,6 +185,27 @@ python3 /opt/aegisedr/agent.py {{ console_url }}<button class="copy-btn" onclick
 </div>
 
 <script>
+async function createEnrollment() {
+  const label = document.getElementById('enroll-label').value.trim() || 'agent';
+  const uses = parseInt(document.getElementById('enroll-uses').value || '1', 10);
+  const res = await api('POST', '/api/enrollment/codes', {label, max_uses: uses, ttl_hours: 24});
+  const box = document.getElementById('enroll-result');
+  box.replaceChildren();
+  if (!res || !res.code) {
+    box.textContent = 'Could not create a code. Check that you are still signed in.';
+    return;
+  }
+  box.textContent = 'Code (shown once): ' + res.code + ' — expires ' + res.expires_at;
+  document.querySelectorAll('.code-block').forEach(el => {
+    el.childNodes[0].textContent = el.childNodes[0].textContent.replaceAll('ENROLLMENT_CODE', res.code);
+  });
+}
+
+async function revokeCode(id) {
+  await api('POST', `/api/enrollment/codes/${id}/revoke`);
+  location.reload();
+}
+
 function copyCode(id) {
   const el = document.getElementById(id);
   const btn = el.querySelector('.copy-btn');

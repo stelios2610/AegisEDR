@@ -86,7 +86,7 @@ autoinstall:
   identity:
     hostname: aegisedr
     username: aegisedr
-    password: "$6$rounds=65536$aegisedr$EbKQf4DlN8TvJqPz5sYmX2wR6uHcA1gB7iF3eL9oM0nD4kV"
+    password: "PASSWORD_HASH_PLACEHOLDER"
 
   storage:
     layout:
@@ -129,13 +129,20 @@ autoinstall:
 
   user-data:
     chpasswd:
-      expire: false
+      expire: true
 
   late-commands:
     - curtin in-target --target=/target -- bash /cdrom/aegisedr_setup/install.sh
     - "echo 'aegisedr ALL=(ALL) NOPASSWD: ALL' > /target/etc/sudoers.d/aegisedr"
     - chmod 440 /target/etc/sudoers.d/aegisedr
 USERDATA
+
+_aegis_init_pass=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 20)
+_aegis_hash=$(openssl passwd -6 "$_aegis_init_pass")
+AEGIS_OS_HASH="$_aegis_hash" AEGIS_OS_FILE="$CUSTOM/nocloud/user-data" python3 -c 'import os, pathlib; p = pathlib.Path(os.environ["AEGIS_OS_FILE"]); p.write_text(p.read_text().replace("PASSWORD_HASH_PLACEHOLDER", os.environ["AEGIS_OS_HASH"]))'
+umask 077
+printf '%s\n' "$_aegis_init_pass" > /output/OS_INITIAL_PASSWORD.txt
+unset _aegis_init_pass _aegis_hash AEGIS_OS_HASH AEGIS_OS_FILE
 
 # ── 4. Post-install script ────────────────────────────────────────────────────
 echo "[4/7] Writing post-install script..."
@@ -262,7 +269,7 @@ ufw default allow outgoing
 ufw allow 22/tcp comment "SSH"
 ufw allow 80/tcp comment "HTTP redirect"
 ufw allow 443/tcp comment "AegisEDR Console"
-ufw allow 9000/tcp comment "Agent API"
+# Console listens on 127.0.0.1:9000. Agents connect through nginx on 443.
 ufw --force enable
 
 # Login banner
@@ -273,7 +280,7 @@ cat > /etc/issue << 'BANNER'
   ║                  Version 1.0.0                   ║
   ║                                                  ║
   ║  First boot: setup wizard will start             ║
-  ║  Default login: aegisedr / AegisEDR2024!        ║
+  ║  OS password is generated at first boot wizard ║
   ╚══════════════════════════════════════════════════╝
 
 BANNER

@@ -97,31 +97,7 @@ if (Test-Path $rulesSource) {
 }
 Write-Host "  OK" -ForegroundColor Green
 
-Write-Host "[5/7] Disabling Windows Defender..." -ForegroundColor Yellow
-try {
-    $policyKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender"
-    $rtpKey    = "$policyKey\Real-Time Protection"
-    $spyKey    = "$policyKey\Spynet"
-    New-Item -Path $policyKey -Force | Out-Null
-    New-Item -Path $rtpKey    -Force | Out-Null
-    New-Item -Path $spyKey    -Force | Out-Null
-    Set-ItemProperty -Path $policyKey -Name "DisableAntiSpyware"         -Value 1 -Type DWord -Force
-    Set-ItemProperty -Path $policyKey -Name "DisableAntiVirus"            -Value 1 -Type DWord -Force
-    Set-ItemProperty -Path $rtpKey    -Name "DisableRealtimeMonitoring"   -Value 1 -Type DWord -Force
-    Set-ItemProperty -Path $rtpKey    -Name "DisableIOAVProtection"       -Value 1 -Type DWord -Force
-    Set-ItemProperty -Path $rtpKey    -Name "DisableBehaviorMonitoring"   -Value 1 -Type DWord -Force
-    Set-ItemProperty -Path $rtpKey    -Name "DisableOnAccessProtection"   -Value 1 -Type DWord -Force
-    Set-ItemProperty -Path $spyKey    -Name "SpynetReporting"             -Value 0 -Type DWord -Force
-    Set-ItemProperty -Path $spyKey    -Name "SubmitSamplesConsent"        -Value 2 -Type DWord -Force
-    Set-MpPreference -DisableRealtimeMonitoring $true -DisableIOAVProtection $true -DisableBehaviorMonitoring $true -ErrorAction SilentlyContinue
-    Add-MpPreference -ExclusionPath $AgentDir  -ErrorAction SilentlyContinue
-    Add-MpPreference -ExclusionPath $DataDir   -ErrorAction SilentlyContinue
-    Write-Host "  Defender disabled via Group Policy. Reboot for full effect." -ForegroundColor Green
-} catch {
-    Write-Host "  Warning: $_" -ForegroundColor Yellow
-}
-
-Write-Host "[6/7] Registering scheduled tasks..." -ForegroundColor Yellow
+Write-Host "[5/7] Registering scheduled tasks. Windows Defender is left enabled." -ForegroundColor Yellow
 
 # Agent task (SYSTEM, runs at startup, restarts on failure)
 $agentAction    = New-ScheduledTaskAction -Execute $pythonExe -Argument "`"$AgentDir\agent_standalone.py`"" -WorkingDirectory $AgentDir

@@ -132,7 +132,7 @@ done
 
 while true; do
     ADMIN_PASS=$(whiptail --title "Admin Password" --passwordbox \
-        "Enter password for '$ADMIN_USER':\n(minimum 8 characters)" \
+        "Enter password for '$ADMIN_USER':\n(minimum 12 characters)" \
         10 55 3>&1 1>&2 2>&3) || exit 1
 
     ADMIN_PASS2=$(whiptail --title "Confirm Password" --passwordbox \
@@ -144,8 +144,8 @@ while true; do
         continue
     fi
 
-    if [ ${#ADMIN_PASS} -lt 8 ]; then
-        whiptail --title "Error" --msgbox "Password too short (minimum 8 characters)." 8 45
+    if [ ${#ADMIN_PASS} -lt 12 ]; then
+        whiptail --title "Error" --msgbox "Password too short (minimum 12 characters)." 8 45
         continue
     fi
     break
@@ -155,30 +155,36 @@ done
 whiptail --title "AegisEDR" --infobox \
     "Applying configuration...\n\nPlease wait." 8 45
 
-# Initialize DB and create admin user
-python3 - << PYSETUP
-import asyncio, sys
+# Initialize DB and create admin user. Credentials come from the environment
+# so a password that contains quotes cannot break out of the Python source.
+export AEGIS_ADMIN_USER="$ADMIN_USER"
+export AEGIS_ADMIN_PASS="$ADMIN_PASS"
+python3 - << 'PYSETUP'
+import asyncio, os, sys
 sys.path.insert(0, '/opt/aegisedr')
 import bcrypt
 
 async def setup():
     from core.database import init_db, get_db
+    username = os.environ["AEGIS_ADMIN_USER"]
+    password = os.environ["AEGIS_ADMIN_PASS"].encode()
+    if len(password) < 12 or len(password) > 72:
+        raise SystemExit("Admin password must be 12-72 bytes")
     await init_db()
     db = await get_db()
     async with db:
-        db.row_factory = __import__('aiosqlite').Row
-        hashed = bcrypt.hashpw('${ADMIN_PASS}'.encode(), bcrypt.gensalt(12)).decode()
-        # Remove default admin, create new one
+        hashed = bcrypt.hashpw(password, bcrypt.gensalt(12)).decode()
         await db.execute("DELETE FROM users")
         await db.execute(
             "INSERT INTO users (username, password_hash, role) VALUES (?,?,?)",
-            ('${ADMIN_USER}', hashed, 'admin')
+            (username, hashed, 'admin')
         )
         await db.commit()
         print("DB: admin user created")
 
 asyncio.run(setup())
 PYSETUP
+unset AEGIS_ADMIN_PASS
 
 # Load YARA rules from files into DB
 python3 - << 'YARALOAD'

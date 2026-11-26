@@ -77,7 +77,7 @@ def get_status() -> tuple[str, int]:
         resp = requests.get(
             f"{_console_url}/api/stats",
             headers={"Authorization": f"Bearer {token}"},
-            verify=False, timeout=5
+            verify=os.environ.get("AEGISEDR_CA") or True, timeout=5
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -171,9 +171,6 @@ def disable_protection(icon, it):
     global _protection_enabled
     if not IS_ADMIN:
         return
-    _run_ps("Set-MpPreference -DisableRealtimeMonitoring $true "
-            "-DisableIOAVProtection $true -DisableBehaviorMonitoring $true "
-            "-ErrorAction SilentlyContinue")
     subprocess.run(["schtasks", "/End", "/TN", "AegisEDRAgent"],
                    capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
     _protection_enabled = False
@@ -184,9 +181,6 @@ def enable_protection(icon, it):
     global _protection_enabled
     if not IS_ADMIN:
         return
-    _run_ps("Set-MpPreference -DisableRealtimeMonitoring $false "
-            "-DisableIOAVProtection $false -DisableBehaviorMonitoring $false "
-            "-ErrorAction SilentlyContinue")
     subprocess.run(["schtasks", "/Run", "/TN", "AegisEDRAgent"],
                    capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
     _protection_enabled = True
@@ -245,7 +239,7 @@ def scan_file(icon, it):
                     f"{console}/api/ioc/check",
                     json={"value": file_hash, "type": "hash"},
                     headers={"X-Agent-Token": token},
-                    verify=False, timeout=5
+                    verify=os.environ.get("AEGISEDR_CA") or True, timeout=5
                 )
                 if resp.json().get("found"):
                     name = resp.json().get("threat", {}).get("threat_name", "Known Malware")
