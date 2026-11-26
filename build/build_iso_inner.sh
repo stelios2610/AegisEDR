@@ -81,8 +81,7 @@ autoinstall:
   identity:
     hostname: aegisedr
     username: aegisedr
-    password: "$6$rounds=4096$tzMO5B0I$FJC5QFXN4Y8bV3K7mWz9pXeA2hRsL6nDqG0JtKuI1vHdP8rMwZcE3aNbO5fYl4gXjS7iUqVR0kZeT2mL9C."
-    # Default password: AegisEDR2024! — wizard forces change
+    password: "PASSWORD_HASH_PLACEHOLDER"
 
   storage:
     layout:
@@ -124,6 +123,13 @@ autoinstall:
     - curtin in-target --target=/target -- bash /cdrom/scripts/aegisedr_install.sh
     - echo 'aegisedr ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/aegisedr
 USERDATA
+
+_aegis_init_pass=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 20)
+_aegis_hash=$(openssl passwd -6 "$_aegis_init_pass")
+AEGIS_OS_HASH="$_aegis_hash" AEGIS_OS_FILE="$WORK_DIR/iso_out/nocloud/user-data" python3 -c 'import os, pathlib; p = pathlib.Path(os.environ["AEGIS_OS_FILE"]); p.write_text(p.read_text().replace("PASSWORD_HASH_PLACEHOLDER", os.environ["AEGIS_OS_HASH"]))'
+umask 077
+printf '%s\n' "$_aegis_init_pass" > /output/OS_INITIAL_PASSWORD.txt
+unset _aegis_init_pass _aegis_hash AEGIS_OS_HASH AEGIS_OS_FILE
 
 # Post-install script
 echo "[4/8] Writing post-install script..."
@@ -170,6 +176,15 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';
     add_header Strict-Transport-Security "max-age=31536000" always;
+    location /ws/ {
+        proxy_pass http://127.0.0.1:9000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
     location / {
         proxy_pass http://127.0.0.1:9000;
         proxy_set_header Host $host;
@@ -228,7 +243,7 @@ ufw default allow outgoing
 ufw allow 22/tcp
 ufw allow 80/tcp
 ufw allow 443/tcp
-ufw allow 9000/tcp
+# Console listens on 127.0.0.1:9000. Agents connect through nginx on 443.
 ufw --force enable
 
 # MOTD

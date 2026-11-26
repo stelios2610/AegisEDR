@@ -302,9 +302,9 @@ async function loadHistory() {
     if (!jobs.length) return;
     tbody.innerHTML = jobs.map(j => `
       <tr>
-        <td>${j.hostname || 'Unknown'}</td>
-        <td><span class="badge badge-medium">${j.scan_type}</span></td>
-        <td><span class="badge badge-${j.status==='completed'?'online':'offline'}">${j.status}</span></td>
+        <td>${escHtml(j.hostname || 'Unknown')}</td>
+        <td><span class="badge badge-medium">${escHtml(j.scan_type || '')}</span></td>
+        <td><span class="badge badge-${j.status==='completed'?'online':'offline'}">${escHtml(j.status || '')}</span></td>
         <td>${(j.files_scanned||0).toLocaleString()}</td>
         <td>${j.threats_found > 0 ? `<span class="badge badge-critical">${j.threats_found}</span>` : '<span style="color:var(--green)">✓ 0</span>'}</td>
         <td class="text-muted">${(j.started_at||'—').substring(0,16)}</td>

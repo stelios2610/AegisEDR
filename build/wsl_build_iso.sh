@@ -57,8 +57,11 @@ instance-id: aegisedr-1
 local-hostname: aegisedr
 META
 
-# Generate password hash for "AegisEDR2024!"
-PASS_HASH=$(python3 -c "import crypt; print(crypt.crypt('AegisEDR2024!', crypt.mksalt(crypt.METHOD_SHA512)))" 2>/dev/null || echo "\$6\$aegisedr\$placeholder")
+INIT_PASS=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 20)
+PASS_HASH=$(openssl passwd -6 "$INIT_PASS")
+umask 077
+printf '%s\n' "$INIT_PASS" > "$(dirname "$OUTPUT")/OS_INITIAL_PASSWORD.txt"
+unset INIT_PASS
 
 cat > "$CUSTOM/nocloud/user-data" << USERDATA
 #cloud-config
@@ -108,7 +111,7 @@ autoinstall:
     - figlet
   user-data:
     chpasswd:
-      expire: false
+      expire: true
   late-commands:
     - curtin in-target --target=/target -- bash /cdrom/aegisedr_setup/install.sh
     - "echo 'aegisedr ALL=(ALL) NOPASSWD: ALL' > /target/etc/sudoers.d/aegisedr"
@@ -188,7 +191,7 @@ ufw default allow outgoing
 ufw allow 22/tcp
 ufw allow 80/tcp
 ufw allow 443/tcp
-ufw allow 9000/tcp
+# Console listens on 127.0.0.1:9000. Agents connect through nginx on 443.
 ufw --force enable
 
 cat > /etc/motd << 'MOTD'

@@ -11,7 +11,7 @@ sudo bash build_iso.sh
 ```
 
 Boot το ISO σε Hyper-V / VMware → first-boot wizard → ρώτα IP + password.
-Console: `https://<server-ip>`  |  Login: `admin / [your password]`
+Console: `https://<server-ip>/setup`  |  The one-time setup token is in `/opt/aegisedr/data/setup_token`. There is no default password.
 
 ---
 
@@ -19,8 +19,8 @@ Console: `https://<server-ip>`  |  Login: `admin / [your password]`
 
 ```bash
 cd agent/
-bash build_linux_deb.sh http://CONSOLE_IP:9000
-# Output: dist/aegisedr-agent_1.0.0_amd64.deb
+# CONSOLE is https://<server>. ENROLL and the certificate SHA-256 come from the Deploy page.
+sudo bash install_linux.sh https://CONSOLE ENROLLMENT_CODE CERT_SHA256
 ```
 
 Install σε endpoint:
@@ -36,7 +36,8 @@ sudo dpkg -i aegisedr-agent_1.0.0_amd64.deb
 # Πρώτα install: pip install pyinstaller
 # Και: Inno Setup 6 από https://jrsoftware.org/isdl.php
 
-python agent/build_windows_installer.py http://CONSOLE_IP:9000
+# Download install.ps1 from the console Deploy page. It asks for the console URL,
+# an enrollment code, and the certificate SHA-256. It does not disable Defender.
 # Output: dist/AegisEDR-Agent-Setup-v1.0.0.exe
 ```
 

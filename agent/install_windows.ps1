@@ -3,11 +3,16 @@
 # Usage: iex (iwr "http://CONSOLE_IP/agent/install.ps1" -UseBasicParsing).Content
 
 param(
-    [string]$ConsoleUrl = ""
+    [string]$ConsoleUrl = "",
+    [string]$EnrollmentCode = "",
+    [string]$CertSha256 = ""
 )
 
 if (-not $ConsoleUrl) {
-    $ConsoleUrl = Read-Host "Enter AegisEDR Console URL (e.g. http://192.168.1.100:9000)"
+    $ConsoleUrl = Read-Host "Enter AegisEDR Console URL (https://console)"
+}
+if (-not $EnrollmentCode) {
+    $EnrollmentCode = Read-Host "Enter the enrollment code from the console Deploy page"
 }
 
 $AgentDir = "C:\Program Files\AegisEDR"
@@ -31,15 +36,34 @@ New-Item -ItemType Directory -Force -Path $AgentDir | Out-Null
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
 New-Item -ItemType Directory -Force -Path "$DataDir\Quarantine" | Out-Null
 
-Write-Host "[2/6] Downloading agent files..."
-$agentUrl = "$ConsoleUrl/agent/agent_windows.py"
-& curl.exe -k -s -o "$AgentDir\agent.py" $agentUrl
+Write-Host "[2/6] Pinning the console certificate and downloading the agent..."
+$curlCa = @()
+$caPath = Join-Path $DataDir "console.pem"
+if ($ConsoleUrl -like "https://*") {
+    if (-not $CertSha256) {
+        Write-Host "ERROR: HTTPS requires the certificate SHA-256 from the Deploy page." -ForegroundColor Red
+        exit 1
+    }
+    & curl.exe -k -fsSL -o $caPath "$ConsoleUrl/api/ca"
+    $actual = (Get-FileHash -Algorithm SHA256 $caPath).Hash.ToLower()
+    if ($actual -ne $CertSha256.ToLower()) {
+        Write-Host "ERROR: Console certificate does not match the expected SHA-256." -ForegroundColor Red
+        exit 1
+    }
+    $curlCa = @("--cacert", $caPath)
+}
+& curl.exe @curlCa -fsSL -o "$AgentDir\agent.py" "$ConsoleUrl/agent/agent_windows.py"
+& curl.exe @curlCa -fsSL -o "$AgentDir\edr_common.py" "$ConsoleUrl/agent/edr_common.py"
+& curl.exe @curlCa -fsSL -o "$AgentDir\app_windows.py" "$ConsoleUrl/agent/app_windows.py"
+& curl.exe @curlCa -fsSL -o "$AgentDir\tray_windows.py" "$ConsoleUrl/agent/tray_windows.py"
 if (-not (Test-Path "$AgentDir\agent.py") -or (Get-Item "$AgentDir\agent.py").Length -lt 100) {
     Write-Host "ERROR: Failed to download agent. Check console URL and connectivity." -ForegroundColor Red
     exit 1
 }
-& curl.exe -k -s -o "$AgentDir\app_windows.py"   "$ConsoleUrl/agent/app_windows.py"
-& curl.exe -k -s -o "$AgentDir\tray_windows.py"  "$ConsoleUrl/agent/tray_windows.py"
+$cfg = @{ console_url = $ConsoleUrl; enrollment_code = $EnrollmentCode }
+if (Test-Path $caPath) { $cfg.ca_cert = $caPath }
+$json = $cfg | ConvertTo-Json
+[System.IO.File]::WriteAllText((Join-Path $DataDir "config.json"), $json, (New-Object System.Text.UTF8Encoding $false))
 
 Write-Host "[3/6] Checking Python..."
 $python = Get-Command python -ErrorAction SilentlyContinue
@@ -58,41 +82,7 @@ if ($LASTEXITCODE -ne 0) {
     python -m pip install -q requests watchdog psutil customtkinter pillow
 }
 
-Write-Host "[5/6] Disabling Windows Defender..."
-try {
-    # Policy keys - override Tamper Protection (Group Policy path takes precedence)
-    $policyKey  = "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender"
-    $rtpKey     = "$policyKey\Real-Time Protection"
-    $spynetKey  = "$policyKey\Spynet"
-    New-Item -Path $policyKey  -Force | Out-Null
-    New-Item -Path $rtpKey     -Force | Out-Null
-    New-Item -Path $spynetKey  -Force | Out-Null
-    # Disable AV entirely via policy
-    Set-ItemProperty -Path $policyKey -Name "DisableAntiSpyware"          -Value 1 -Type DWord -Force
-    Set-ItemProperty -Path $policyKey -Name "DisableAntiVirus"             -Value 1 -Type DWord -Force
-    # Disable real-time protection via policy
-    Set-ItemProperty -Path $rtpKey    -Name "DisableRealtimeMonitoring"    -Value 1 -Type DWord -Force
-    Set-ItemProperty -Path $rtpKey    -Name "DisableIOAVProtection"        -Value 1 -Type DWord -Force
-    Set-ItemProperty -Path $rtpKey    -Name "DisableBehaviorMonitoring"    -Value 1 -Type DWord -Force
-    Set-ItemProperty -Path $rtpKey    -Name "DisableOnAccessProtection"    -Value 1 -Type DWord -Force
-    Set-ItemProperty -Path $rtpKey    -Name "DisableScanOnRealtimeEnable"  -Value 1 -Type DWord -Force
-    # Disable cloud/MAPS
-    Set-ItemProperty -Path $spynetKey -Name "SpynetReporting"              -Value 0 -Type DWord -Force
-    Set-ItemProperty -Path $spynetKey -Name "SubmitSamplesConsent"         -Value 2 -Type DWord -Force
-    # Also try cmdlet approach (works if Tamper Protection is off)
-    Set-MpPreference -DisableRealtimeMonitoring  $true -ErrorAction SilentlyContinue
-    Set-MpPreference -DisableIOAVProtection       $true -ErrorAction SilentlyContinue
-    Set-MpPreference -DisableBehaviorMonitoring   $true -ErrorAction SilentlyContinue
-    Set-MpPreference -DisableBlockAtFirstSeen     $true -ErrorAction SilentlyContinue
-    # Add agent directory to exclusions so Defender ignores it even if partially active
-    Add-MpPreference -ExclusionPath $AgentDir     -ErrorAction SilentlyContinue
-    Add-MpPreference -ExclusionPath $DataDir      -ErrorAction SilentlyContinue
-    Write-Host "  Defender disabled via Group Policy registry. Reboot may be needed for full effect." -ForegroundColor Green
-} catch {
-    Write-Host "  WARNING: $_ — Tamper Protection may block full disable until reboot." -ForegroundColor Yellow
-}
-
-Write-Host "[6/6] Installing Windows Service and Tray..."
+Write-Host "[5/6] Installing the agent service and tray. Windows Defender is left enabled."
 $wrapperPath = "$AgentDir\run_agent.py"
 "import subprocess, sys, os" | Out-File -FilePath $wrapperPath -Encoding utf8
 "os.chdir(r'$AgentDir')" | Add-Content -Path $wrapperPath -Encoding utf8

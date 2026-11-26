@@ -47,6 +47,16 @@ server {
     ssl_certificate_key /etc/aegisedr/ssl/key.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
 
+    location /ws/ {
+        proxy_pass http://127.0.0.1:9000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:9000;
         proxy_set_header Host $host;
@@ -96,8 +106,8 @@ echo ""
 echo "============================================"
 echo "  AegisEDR installed successfully!"
 echo ""
-echo "  Console: https://$(hostname -I | awk '{print $1}')"
-echo "  Default login: admin / AegisEDR2024!"
+echo "  Console: https://$(hostname -I | awk '{print $1}')/setup"
+echo "  One-time setup token: /opt/aegisedr/data/setup_token"
 echo ""
-echo "  IMPORTANT: Change the default password!"
+echo "  There is no default password. The token is deleted after setup."
 echo "============================================"

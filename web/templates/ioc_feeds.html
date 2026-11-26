@@ -114,11 +114,17 @@ async function lookupIoc() {
   if (!value) return;
   const res = await api('POST', '/api/ioc/check', {value, type});
   const div = document.getElementById('lookupResult');
+  div.replaceChildren();
+  const box = document.createElement('div');
   if (res.found) {
-    div.innerHTML = `<div class="alert alert-error">⚠️ MALICIOUS — ${res.threat.threat_name || 'Known threat'} (${res.threat.severity}) — Source: ${res.threat.source}</div>`;
+    const threat = res.threat || {};
+    box.className = 'alert alert-error';
+    box.textContent = `MALICIOUS — ${threat.threat_name || 'Known threat'} (${threat.severity || 'unknown'}) — Source: ${threat.source || 'unknown'}`;
   } else {
-    div.innerHTML = `<div class="alert alert-success">✓ Not found in IoC database</div>`;
+    box.className = 'alert alert-success';
+    box.textContent = 'Not found in IoC database';
   }
+  div.appendChild(box);
 }
 </script>
 {% endblock %}

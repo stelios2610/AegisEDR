@@ -24,6 +24,8 @@
           <td>
             {% if item.restored %}
               <span class="badge badge-resolved">Restored</span>
+            {% elif item.pending_action %}
+              <span class="badge badge-medium">{{ item.pending_action }} queued</span>
             {% else %}
               <span class="badge badge-active">Isolated</span>
             {% endif %}
@@ -48,17 +50,25 @@
 
 {% block extra_js %}
 <script>
+function markQueued(id, label) {
+  const cell = document.querySelector(`#q${id} td:nth-child(6)`);
+  cell.replaceChildren();
+  const badge = document.createElement('span');
+  badge.className = 'badge badge-medium';
+  badge.textContent = label;
+  cell.appendChild(badge);
+}
+
 async function restoreItem(id) {
-  if (!confirm('Restore this file? Make sure the threat is neutralized.')) return;
-  await api('POST', `/api/quarantine/${id}/restore`);
-  document.querySelector(`#q${id} td:nth-child(6)`).innerHTML = '<span class="badge badge-resolved">Restored</span>';
-  document.querySelector(`#q${id} td:last-child`).innerHTML = '';
+  if (!confirm('Queue restore on the endpoint? The file stays isolated until the agent confirms.')) return;
+  const res = await api('POST', `/api/quarantine/${id}/restore`);
+  if (res && res.status === 'queued') markQueued(id, 'Restore queued');
 }
 
 async function deleteItem(id) {
-  if (!confirm('Permanently delete this file?')) return;
-  await api('DELETE', `/api/quarantine/${id}`);
-  document.getElementById(`q${id}`).remove();
+  if (!confirm('Queue permanent deletion on the endpoint?')) return;
+  const res = await api('DELETE', `/api/quarantine/${id}`);
+  if (res && res.status === 'queued') markQueued(id, 'Delete queued');
 }
 </script>
 {% endblock %}

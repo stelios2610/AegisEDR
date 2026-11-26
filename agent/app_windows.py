@@ -95,14 +95,14 @@ class API:
 
     def get_threats(self) -> list:
         try:
-            r = requests.get(f"{self.url}/api/threats", headers=self._h(), verify=False, timeout=5)
+            r = requests.get(f"{self.url}/api/threats", headers=self._h(), verify=os.environ.get("AEGISEDR_CA") or True, timeout=5)
             return r.json().get("threats", []) if r.ok else []
         except Exception:
             return []
 
     def get_stats(self) -> dict:
         try:
-            r = requests.get(f"{self.url}/api/stats", headers=self._h(), verify=False, timeout=5)
+            r = requests.get(f"{self.url}/api/stats", headers=self._h(), verify=os.environ.get("AEGISEDR_CA") or True, timeout=5)
             return r.json() if r.ok else {}
         except Exception:
             return {}
@@ -112,14 +112,14 @@ class API:
             return {}
         try:
             r = requests.get(f"{self.url}/api/endpoints/{self.endpoint_id}/status",
-                             headers=self._h(), verify=False, timeout=5)
+                             headers=self._h(), verify=os.environ.get("AEGISEDR_CA") or True, timeout=5)
             return r.json() if r.ok else {}
         except Exception:
             return {}
 
     def connected(self) -> bool:
         try:
-            r = requests.get(f"{self.url}/api/stats", headers=self._h(), verify=False, timeout=3)
+            r = requests.get(f"{self.url}/api/stats", headers=self._h(), verify=os.environ.get("AEGISEDR_CA") or True, timeout=3)
             return r.status_code < 500
         except Exception:
             return False
@@ -597,18 +597,10 @@ class AegisApp(ctk.CTk):
                       command=self._stop_agent).grid(row=0, column=1)
 
     def _enable_protection(self):
-        subprocess.run(["powershell", "-NonInteractive", "-Command",
-                        "Set-MpPreference -DisableRealtimeMonitoring $false "
-                        "-ErrorAction SilentlyContinue"],
-                       capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
         subprocess.run(["schtasks", "/Run", "/TN", "AegisEDRAgent"],
                        capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
 
     def _disable_protection(self):
-        subprocess.run(["powershell", "-NonInteractive", "-Command",
-                        "Set-MpPreference -DisableRealtimeMonitoring $true "
-                        "-ErrorAction SilentlyContinue"],
-                       capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
         subprocess.run(["schtasks", "/End", "/TN", "AegisEDRAgent"],
                        capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
 

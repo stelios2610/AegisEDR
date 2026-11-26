@@ -798,23 +798,6 @@ class AegisApp(ctk.CTk):
         ctk.CTkButton(pb, text="Disable", width=130, fg_color="#ef4444", hover_color="#dc2626",
                       command=self._disable_protection).grid(row=0, column=1)
 
-        # Windows Defender
-        d = ctk.CTkFrame(f, corner_radius=12)
-        d.grid(row=2, column=0, sticky="ew", pady=(0,12))
-        d.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(d, text="Windows Defender",
-                     font=ctk.CTkFont(size=15, weight="bold")).grid(row=0, column=0, padx=20, pady=(16,4), sticky="w")
-        ctk.CTkLabel(d, text="Disable Defender so AegisEDR can replace it. Requires reboot to take full effect.",
-                     font=ctk.CTkFont(size=12), text_color="gray").grid(row=1, column=0, padx=20, pady=(0,8), sticky="w")
-        db_btns = ctk.CTkFrame(d, fg_color="transparent")
-        db_btns.grid(row=2, column=0, padx=20, pady=(0,16), sticky="w")
-        ctk.CTkButton(db_btns, text="Disable Defender", width=160,
-                      fg_color="#7c3aed", hover_color="#6d28d9",
-                      command=self._disable_defender).grid(row=0, column=0, padx=(0,8))
-        ctk.CTkButton(db_btns, text="Re-enable", width=130,
-                      fg_color="#374151", hover_color="#4b5563",
-                      command=self._enable_defender).grid(row=0, column=1)
-
         # Agent service
         s = ctk.CTkFrame(f, corner_radius=12)
         s.grid(row=3, column=0, sticky="ew", pady=(0,12))
@@ -865,28 +848,6 @@ class AegisApp(ctk.CTk):
         except Exception:
             pass
 
-    def _disable_defender(self):
-        def _run():
-            cmds = [
-                'New-Item -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows Defender" -Force | Out-Null',
-                'New-Item -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection" -Force | Out-Null',
-                'Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows Defender" -Name "DisableAntiSpyware" -Value 1 -Type DWord -Force',
-                'Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection" -Name "DisableRealtimeMonitoring" -Value 1 -Type DWord -Force',
-                'Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection" -Name "DisableIOAVProtection" -Value 1 -Type DWord -Force',
-                'Set-MpPreference -DisableRealtimeMonitoring $true -DisableIOAVProtection $true -ErrorAction SilentlyContinue',
-            ]
-            for cmd in cmds:
-                subprocess.run(["powershell", "-NonInteractive", "-Command", cmd],
-                               capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-        threading.Thread(target=_run, daemon=True).start()
-
-    def _enable_defender(self):
-        subprocess.run(
-            ["powershell", "-NonInteractive", "-Command",
-             "Set-MpPreference -DisableRealtimeMonitoring $false "
-             "-DisableIOAVProtection $false -ErrorAction SilentlyContinue"],
-            capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW
-        )
 
     def _restart_agent(self):
         subprocess.run(["schtasks", "/End", "/TN", "AegisEDRAgent"],

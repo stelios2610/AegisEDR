@@ -41,11 +41,12 @@ async def _bulk_insert_iocs(entries: list[tuple]):
         for batch in _chunks(entries, 500):
             for entry in batch:
                 try:
-                    await db.execute(
+                    cur = await db.execute(
                         "INSERT OR IGNORE INTO ioc_entries (ioc_type, value, threat_name, source, severity) VALUES (?,?,?,?,?)",
                         entry
                     )
-                    count += 1
+                    if cur.rowcount and cur.rowcount > 0:
+                        count += 1
                 except Exception:
                     pass
         await db.commit()
@@ -82,12 +83,29 @@ async def _update_url_list(client: httpx.AsyncClient, feed: dict):
     count = await _bulk_insert_iocs(entries)
     await _update_feed_stats(feed["id"], count)
 
+async def _threatfox_auth_key() -> str:
+    db = await get_db()
+    async with db:
+        async with db.execute(
+            "SELECT value FROM settings WHERE key='threatfox_auth_key'"
+        ) as cur:
+            row = await cur.fetchone()
+            return (row[0] or "").strip() if row else ""
+
+
 async def _update_threatfox(client: httpx.AsyncClient, feed: dict):
     payload = {"query": "get_iocs", "days": 7}
-    resp = await client.post(feed["url"], json=payload)
+    headers = {}
+    auth_key = await _threatfox_auth_key()
+    if auth_key:
+        headers["Auth-Key"] = auth_key
+    resp = await client.post(feed["url"], json=payload, headers=headers)
     data = resp.json()
+    items = data.get("data") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        raise RuntimeError(f"ThreatFox returned no IOC list (status={data.get('query_status') if isinstance(data, dict) else 'invalid'})")
     entries = []
-    for item in data.get("data", []):
+    for item in items:
         ioc_type = item.get("ioc_type", "")
         value = item.get("ioc", "").strip().lower()
         threat = item.get("malware", "unknown")
